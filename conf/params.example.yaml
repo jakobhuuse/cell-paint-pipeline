@@ -1,0 +1,24 @@
+# Copy to conf/params.yaml and fill in. Passed to Nextflow via -params-file.
+# STUB: placeholder values — replace paths with your data.
+
+# --- Inputs ---
+input_dir: /path/to/raw/images        # root; one subdirectory per plate
+cppipe:    conf/cellprofiler/pipeline.cppipe
+platemap:  conf/platemap.csv
+dp_config: conf/deepprofiler/config.json
+
+# --- Outputs ---
+outdir: results
+
+# --- Branch toggles ---
+run_deepprofiler: false                # enable the deep-learning embedding branch (needs GPU)
+
+# --- pycytominer options (consumed by workflow/modules/pycytominer.nf) ---
+pycytominer:
+  normalize_method: standardize        # e.g. standardize | mad_robustize
+  feature_select_ops:                  # ordered list of operations
+    - variance_threshold
+    - correlation_threshold
+    - drop_na_columns
+    - blocklist
+  aggregate_level: well                # aggregation strata (e.g. well)

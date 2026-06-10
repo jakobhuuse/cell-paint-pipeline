@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual envs / uv
+.venv/
+env/
+ENV/
+
+# Ruff / pytest caches
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+
+# Environment
+.env
+
+# Project data (raw images, intermediate outputs)
+data/
+
+# Nextflow
+work/
+.nextflow/
+.nextflow.log*
+results/
+
+# Apptainer / Singularity images
+*.sif
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Claude
+CLAUDE.md
+.claude/
