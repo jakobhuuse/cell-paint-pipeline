@@ -1,36 +1,24 @@
-#!/usr/bin/env nextflow
-
-/*
- * Cell-painting feature-extraction pipeline.
- *
- *   CellProfiler ─┬─► CytoTable ─► pycytominer
- *                 └─► (bridge) ─► DeepProfiler
- *
- * STUB: processes are stub-only (see `stub:` blocks) — they echo the command they would
- * run so the DAG can be wired and tested with `-stub-run` before the real logic exists.
- * Fan-out across plates is sketched via the `plates` channel.
- */
-
-nextflow.enable.dsl = 2
-
 include { CELLPROFILER } from './modules/cellprofiler.nf'
 include { DEEPPROFILER } from './modules/deepprofiler.nf'
 include { CYTOTABLE    } from './modules/cytotable.nf'
 include { PYCYTOMINER  } from './modules/pycytominer.nf'
 
 // --- Parameters (override via -params-file conf/params.yaml) ---
-params.input_dir  = null          // root of raw image data (per-plate subdirs)
-params.outdir     = 'results'
+params.input_dir  = null          // experiment root of raw image data
+params.plate_glob = '*/*'          // plate dirs relative to input_dir: <date>/<plate>
 params.cppipe     = null          // CellProfiler pipeline (.cppipe)
 params.platemap   = null          // platemap CSV
 params.dp_config  = null          // DeepProfiler config.json
 params.run_deepprofiler = false   // toggle the deep-learning branch
 
 workflow {
-    if( !params.input_dir ) error "Set --input_dir (root of raw images, one subdir per plate)."
+    if( !params.input_dir ) error "Set --input_dir (experiment root of raw images)."
 
     // One work item per plate directory — Nextflow fans these out across the cluster.
-    plates = Channel.fromPath("${params.input_dir}/*", type: 'dir')
+    // Raw layout: <input_dir>/<date>/<plate>/TimePoint_*/*.tif, so a plate sits at
+    // `${params.plate_glob}` (default '*/*') and holds one or more TimePoint_* subdirs.
+    plates = channel.fromPath("${params.input_dir}/${params.plate_glob}", type: 'dir')
+        .map { dir -> tuple(dir.name, dir) }   // (plate_id, plate_dir)
 
     // Stage 1: CellProfiler (image-based measurements + per-site outputs).
     CELLPROFILER(plates, file(params.cppipe ?: 'NO_CPPIPE'))

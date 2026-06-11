@@ -41,3 +41,7 @@ results/
 # Claude
 CLAUDE.md
 .claude/
+
+# Nextflow
+params.yaml
+.nextflow.log

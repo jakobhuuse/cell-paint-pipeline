@@ -11,7 +11,7 @@ dp_config: conf/deepprofiler/config.json
 outdir: results
 
 # --- Branch toggles ---
-run_deepprofiler: false                # enable the deep-learning embedding branch (needs GPU)
+run_deepprofiler: false
 
 # --- pycytominer options (consumed by workflow/modules/pycytominer.nf) ---
 pycytominer:

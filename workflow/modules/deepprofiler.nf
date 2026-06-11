@@ -2,9 +2,9 @@
 // Image: our custom deepprofiler image (GPU/TensorFlow).
 
 process DEEPPROFILER {
-    tag "${plate}"
+    tag { plate }
     label 'gpu'
-    publishDir "${params.outdir}/deepprofiler/${plate}", mode: 'copy'
+    publishDir { "${params.outdir}/deepprofiler/${plate}" }, mode: 'copy'
 
     input:
     tuple val(plate), path(dp_metadata)

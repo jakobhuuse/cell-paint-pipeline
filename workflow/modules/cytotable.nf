@@ -2,8 +2,8 @@
 // Image: our cytopipe image (ENTRYPOINT `cytopipe`).
 
 process CYTOTABLE {
-    tag "${plate}"
-    publishDir "${params.outdir}/cytotable/${plate}", mode: 'copy'
+    tag { plate }
+    publishDir { "${params.outdir}/cytotable/${plate}" }, mode: 'copy'
 
     input:
     tuple val(plate), path(measurements)

@@ -2,8 +2,8 @@
 // Image: cytomining/pycytominer (has a built-in file-based CLI).
 
 process PYCYTOMINER {
-    tag "${plate}"
-    publishDir "${params.outdir}/pycytominer/${plate}", mode: 'copy'
+    tag { plate }
+    publishDir { "${params.outdir}/pycytominer/${plate}" }, mode: 'copy'
 
     input:
     tuple val(plate), path(single_cell)
