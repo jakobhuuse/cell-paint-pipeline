@@ -1,4 +1,4 @@
-# cytopipe — cell-painting feature-extraction pipeline
+# cell-painting-pipeline — cell-painting feature-extraction pipeline
 
 A pipeline that turns raw microscopy images of perturbed cells into per-perturbation
 feature profiles, designed to scale to TB-sized datasets on an HPC cluster.
@@ -14,7 +14,7 @@ raw images
   └─► DeepProfiler  (deep learning)   ──► single-cell embeddings (.npz)
             │
             ▼
-       CytoTable   ──► merged single-cell features (parquet)     [this repo: `cytopipe`]
+       CytoTable   ──► merged single-cell features (parquet)     [cytopipe: separate repo]
             │
             ▼
       pycytominer ──► annotate → normalize → feature-select → aggregate (well / consensus)
@@ -31,22 +31,14 @@ raw images
   | CellProfiler | `cellprofiler/cellprofiler:4.2.8` | official, pinned |
   | DeepProfiler | `…/deepprofiler` | built here (`containers/deepprofiler/`, GPU/TF) |
   | pycytominer | `cytomining/pycytominer` | official, pinned (built-in CLI) |
-  | cytopipe | `…/cytopipe` | built here (`containers/cytopipe/`, our code) |
-- **`cytopipe`** (this Python package) is the data-management/glue layer built on
-  **CytoTable**. It is the only code we write. Its CLI exposes:
-  - `cytopipe convert` — CytoTable conversion of image-tool output → single-cell parquet
-  - `cytopipe bridge` — CellProfiler → DeepProfiler metadata/segmentation handoff
-  CellProfiler, DeepProfiler, and pycytominer run via their own images' native entrypoints.
+  | cytopipe | `ghcr.io/jakobhuuse/cytopipe` | built from the [cytopipe repo](https://github.com/jakobhuuse/cytopipe) (our code) |
 
-## Develop locally
-
-```bash
-uv sync                       # install deps (incl. dev: ruff, pytest)
-uv run ruff check .           # lint
-uv run ruff format .          # format
-uv run pytest                 # tests
-uv run cytopipe --help        # CLI
-```
+- **`cytopipe`** is the data-management/glue layer built on **CytoTable** — the only code we
+  write. It lives in its own repo ([jakobhuuse/cytopipe](https://github.com/jakobhuuse/cytopipe))
+  and is consumed here purely as a container image, set via `params.cytopipe_image`. Its CLI
+  exposes `cytopipe convert` (image-tool output → single-cell parquet) and `cytopipe bridge`
+  (CellProfiler → DeepProfiler metadata handoff). CellProfiler, DeepProfiler, and pycytominer
+  likewise run via their own images' native entrypoints.
 
 ## Run the pipeline
 
