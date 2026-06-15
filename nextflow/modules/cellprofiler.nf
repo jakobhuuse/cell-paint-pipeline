@@ -61,6 +61,7 @@ process CELLPROFILER_DEEPPROFILER {
 
     output:
     tuple val(plate_id), path('measurement'), emit: measurement
+    tuple val(plate_id), path("measurement/images/"), emit: images
 
     script:
     """

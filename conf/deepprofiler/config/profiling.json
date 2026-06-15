@@ -1,0 +1,38 @@
+{
+  "dataset": {
+    "metadata": {
+      "label_field": "Metadata_Compound",
+      "control_value": ["EMPTY", "DMSO"]
+    },
+    "images": {
+      "channels": ["DNA", "RNA", "ER", "AGP", "Mito"],
+      "file_format": "tiff",
+      "bits": 16,
+      "width": 1080,
+      "height": 1080
+    },
+    "locations": {
+      "mode": "single_cells",
+      "box_size": 128,
+      "mask_objects": false
+    }
+  },
+
+  "prepare": {
+    "compression": {
+      "implement": false
+    }
+  },
+
+  "train": {
+    "partition": {
+      "targets": ["Metadata_Compound"]
+    }
+  },
+
+  "profile": {
+    "feature_layer": "block6a_activation",
+    "checkpoint": "Cell_Painting_CNN_v1.hdf5",
+    "batch_size": 32
+  }
+}
