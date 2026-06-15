@@ -2,7 +2,7 @@ CellProfiler Pipeline: http://www.cellprofiler.org
 Version:5
 DateRevision:428
 GitHash:
-ModuleCount:25
+ModuleCount:24
 HasImagePlaneDetails:False
 
 Images:[module_num:1|svn_version:'Unknown'|variable_revision_number:2|show_window:False|notes:['']|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
@@ -384,31 +384,7 @@ SaveImages:[module_num:23|svn_version:'Unknown'|variable_revision_number:16|show
     How to save the series:T (Time)
     Save with lossless compression?:Yes
 
-ExportToSpreadsheet:[module_num:24|svn_version:'Unknown'|variable_revision_number:13|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the column delimiter:Comma (",")
-    Add image metadata columns to your object data file?:No
-    Add image file and folder names to your object data file?:No
-    Select the measurements to export:Yes
-    Calculate the per-image mean values for object measurements?:No
-    Calculate the per-image median values for object measurements?:No
-    Calculate the per-image standard deviation values for object measurements?:No
-    Output file location:Default Output Folder sub-folder|locations/
-    Create a GenePattern GCT file?:No
-    Select source of sample row name:Metadata
-    Select the image to use as the identifier:None
-    Select the metadata to use as the identifier:None
-    Export all measurement types?:No
-    Press button to select measurements:Nuclei|Location_Center_X,Nuclei|Location_Center_Y
-    Representation of Nan/Inf:NaN
-    Add a prefix to file names?:No
-    Filename prefix:MyExpt_
-    Overwrite existing files without warning?:Yes
-    Data to export:Nuclei
-    Combine these object measurements with those of the previous object?:No
-    File name:\g<Well>-\g<Site>-Nuclei.csv
-    Use the object name for the file name?:No
-
-ExportToDatabase:[module_num:25|svn_version:'Unknown'|variable_revision_number:28|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+ExportToDatabase:[module_num:24|svn_version:'Unknown'|variable_revision_number:28|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Database type:SQLite
     Database name:DefaultDB
     Add a prefix to table names?:No
@@ -428,7 +404,7 @@ ExportToDatabase:[module_num:25|svn_version:'Unknown'|variable_revision_number:2
     Export measurements for all objects to the database?:All
     Select the objects:
     Maximum # of characters in a column name:64
-    Create one table per object, a single object table or a single object view?:One table per object type
+    Create one table per object, a single object table or a single object view?:Single object table
     Enter an image url prepend if you plan to access your files via http:
     Write image thumbnails directly to the database?:No
     Select the images for which you want to save thumbnails:

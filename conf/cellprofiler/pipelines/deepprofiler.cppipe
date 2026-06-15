@@ -2,7 +2,7 @@ CellProfiler Pipeline: http://www.cellprofiler.org
 Version:5
 DateRevision:428
 GitHash:
-ModuleCount:16
+ModuleCount:17
 HasImagePlaneDetails:False
 
 Images:[module_num:1|svn_version:'Unknown'|variable_revision_number:2|show_window:False|notes:['']|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
@@ -197,8 +197,8 @@ IdentifyPrimaryObjects:[module_num:10|svn_version:'Unknown'|variable_revision_nu
 SaveImages:[module_num:11|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the type of image to save:Image
     Select the image to save:CorrDNA
-    Select method for constructing file names:Single name
-    Select image name for file prefix:None
+    Select method for constructing file names:From image filename
+    Select image name for file prefix:OrigDNA
     Enter single file name:\g<Well>_s\g<Site>_w1
     Number of digits:4
     Append a suffix to the image file name?:No
@@ -217,8 +217,8 @@ SaveImages:[module_num:11|svn_version:'Unknown'|variable_revision_number:16|show
 SaveImages:[module_num:12|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the type of image to save:Image
     Select the image to save:CorrMito
-    Select method for constructing file names:Single name
-    Select image name for file prefix:None
+    Select method for constructing file names:From image filename
+    Select image name for file prefix:OrigMito
     Enter single file name:\g<Well>_s\g<Site>_w2
     Number of digits:4
     Append a suffix to the image file name?:No
@@ -237,8 +237,8 @@ SaveImages:[module_num:12|svn_version:'Unknown'|variable_revision_number:16|show
 SaveImages:[module_num:13|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the type of image to save:Image
     Select the image to save:CorrAGP
-    Select method for constructing file names:Single name
-    Select image name for file prefix:None
+    Select method for constructing file names:From image filename
+    Select image name for file prefix:OrigAGP
     Enter single file name:\g<Well>_s\g<Site>_w3
     Number of digits:4
     Append a suffix to the image file name?:No
@@ -257,8 +257,8 @@ SaveImages:[module_num:13|svn_version:'Unknown'|variable_revision_number:16|show
 SaveImages:[module_num:14|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the type of image to save:Image
     Select the image to save:CorrRNA
-    Select method for constructing file names:Single name
-    Select image name for file prefix:None
+    Select method for constructing file names:From image filename
+    Select image name for file prefix:OrigRNA
     Enter single file name:\g<Well>_s\g<Site>_w4
     Number of digits:4
     Append a suffix to the image file name?:No
@@ -277,8 +277,8 @@ SaveImages:[module_num:14|svn_version:'Unknown'|variable_revision_number:16|show
 SaveImages:[module_num:15|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the type of image to save:Image
     Select the image to save:CorrER
-    Select method for constructing file names:Single name
-    Select image name for file prefix:None
+    Select method for constructing file names:From image filename
+    Select image name for file prefix:OrigER
     Enter single file name:\g<Well>_s\g<Site>_w5
     Number of digits:4
     Append a suffix to the image file name?:No
@@ -316,4 +316,28 @@ ExportToSpreadsheet:[module_num:16|svn_version:'Unknown'|variable_revision_numbe
     Data to export:Nuclei
     Combine these object measurements with those of the previous object?:No
     File name:\g<Well>-\g<Site>-Nuclei.csv
+    Use the object name for the file name?:No
+
+ExportToSpreadsheet:[module_num:17|svn_version:'Unknown'|variable_revision_number:13|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+    Select the column delimiter:Comma (",")
+    Add image metadata columns to your object data file?:No
+    Add image file and folder names to your object data file?:No
+    Select the measurements to export:Yes
+    Calculate the per-image mean values for object measurements?:No
+    Calculate the per-image median values for object measurements?:No
+    Calculate the per-image standard deviation values for object measurements?:No
+    Output file location:Default Output Folder|
+    Create a GenePattern GCT file?:No
+    Select source of sample row name:Metadata
+    Select the image to use as the identifier:None
+    Select the metadata to use as the identifier:None
+    Export all measurement types?:No
+    Press button to select measurements:Image|Metadata_Site,Image|Metadata_Well,Image|Metadata_Plate,Image|FileName_OrigDNA,Image|FileName_OrigRNA,Image|FileName_OrigAGP,Image|FileName_OrigER,Image|FileName_OrigMito
+    Representation of Nan/Inf:NaN
+    Add a prefix to file names?:No
+    Filename prefix:MyExpt_
+    Overwrite existing files without warning?:Yes
+    Data to export:Image
+    Combine these object measurements with those of the previous object?:No
+    File name:Image.csv
     Use the object name for the file name?:No
