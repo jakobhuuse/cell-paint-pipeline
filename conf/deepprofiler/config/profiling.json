@@ -8,8 +8,8 @@
       "channels": ["DNA", "RNA", "ER", "AGP", "Mito"],
       "file_format": "tiff",
       "bits": 16,
-      "width": 1080,
-      "height": 1080
+      "width": 2048,
+      "height": 2048
     },
     "locations": {
       "mode": "single_cells",
@@ -27,6 +27,32 @@
   "train": {
     "partition": {
       "targets": ["Metadata_Compound"]
+    },
+    "model": {
+      "name": "efficientnet",
+      "crop_generator": "crop_generator",
+      "augmentations": true,
+      "metrics": ["accuracy"],
+      "epochs": 3,
+      "initialization": "ImageNet",
+      "checkpoint_policy": 1,
+      "params": {
+        "learning_rate": 0.005,
+        "batch_size": 32,
+        "conv_blocks": 0,
+        "label_smoothing": 0.0,
+        "feature_dim": 256
+      }
+    },
+    "sampling": {
+      "factor": 1.0,
+      "cache_size": 10,
+      "workers": 2
+    },
+    "validation": {
+      "top_k": 5,
+      "batch_size": 32,
+      "frequency": 1
     }
   },
 

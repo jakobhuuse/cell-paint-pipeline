@@ -1,7 +1,7 @@
 process CYTOPIPE_BRIDGE {
     tag { plate_id }
     label 'cytopipe'
-    publishDir { "${params.outdir}/cytopipe/${plate_id}" }, mode: 'copy'
+    publishDir { "${params.outdir}/cytopipe/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
 
     input:
     tuple val(plate_id), path(measurement)

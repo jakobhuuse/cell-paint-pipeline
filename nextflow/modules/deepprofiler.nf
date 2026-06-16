@@ -5,24 +5,28 @@ process DEEPPROFILER_PROFILE {
 
     input:
     tuple val(plate_id),
-          path(images,    stageAs: 'inputs/images/*'),
-          path(locations, stageAs: 'inputs/locations/*'),
+          path(images,    stageAs: 'staged/images'),
+          path(locations, stageAs: 'staged/locations'),
           path(index,     stageAs: 'inputs/metadata/index.csv')
     path config, stageAs: 'inputs/config/*'
     path model,  stageAs: 'outputs/results/checkpoint/*'
 
     output:
-    tuple val(plate_id), path('outputs/results/features'),   emit: features
-    tuple val(plate_id), path('outputs/results/logs'),       emit: logs
-    tuple val(plate_id), path('outputs/results/summaries'),  emit: summaries
+    tuple val(plate_id), path('features'), emit: features
 
     script:
     """
-    mkdir -p outputs/results/features outputs/results/logs outputs/results/summaries
+    mkdir -p inputs/images inputs/locations
+    mv staged/images    inputs/images/${plate_id}
+    mv staged/locations inputs/locations/${plate_id}
+
+    mkdir -p outputs/results/features
 
     python3 -m deepprofiler \\
         --root="\${PWD}" \\
         --config=${file(params.deepprofiler_config).name} \\
         profile
+
+    mv outputs/results/features/${plate_id} features
     """
 }

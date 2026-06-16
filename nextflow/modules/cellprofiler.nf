@@ -1,7 +1,7 @@
 process CELLPROFILER_ILLUM {
     tag { plate_id }
     label 'cellprofiler'
-    publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy'
+    publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
 
     input:
     tuple val(plate_id), path(plate)
@@ -53,7 +53,7 @@ process CELLPROFILER_ANALYSIS {
 process CELLPROFILER_DEEPPROFILER {
     tag { plate_id }
     label 'cellprofiler'
-    publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy'
+    publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
 
     input:
     tuple val(plate_id), path(illum), path(plate)
