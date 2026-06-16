@@ -60,12 +60,12 @@ process CELLPROFILER_DEEPPROFILER {
     path cppipe
 
     output:
-    tuple val(plate_id), path('measurement'), emit: measurement
-    tuple val(plate_id), path("measurement/images/"), emit: images
+    tuple val(plate_id), path('deepprofiler'), emit: deepprofiler
+    tuple val(plate_id), path("deepprofiler/images/"), emit: images
 
     script:
     """
-    mkdir -p measurement
+    mkdir -p deepprofiler
 
     find -L "\$(readlink -f ${plate})" -name '*.tif' ! -iname '*_thumb*' > filelist.txt
 
@@ -74,6 +74,6 @@ process CELLPROFILER_DEEPPROFILER {
     cellprofiler -c -r \\
         -p run_pipeline.cppipe \\
         --file-list filelist.txt \\
-        -o measurement
+        -o deepprofiler
     """
 }

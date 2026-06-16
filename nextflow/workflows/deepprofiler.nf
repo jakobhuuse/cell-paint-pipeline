@@ -1,5 +1,5 @@
 include { CELLPROFILER_ILLUM; CELLPROFILER_DEEPPROFILER } from '../modules/cellprofiler.nf'
-include { CYTOPIPE_BRIDGE }      from '../modules/cytopipe.nf'
+include { CYTOPIPE_CELLPROFILER_DEEPPROFILER; CYTOPIPE_DEEPPROFILER_PARQUET }      from '../modules/cytopipe.nf'
 include { DEEPPROFILER_PROFILE } from '../modules/deepprofiler.nf'
 
 workflow {
@@ -15,9 +15,9 @@ workflow {
         file(params.deepprofiler_cppipe)
     )
 
-    CYTOPIPE_BRIDGE(CELLPROFILER_DEEPPROFILER.out.measurement, platemap)
+    CYTOPIPE_CELLPROFILER_DEEPPROFILER(CELLPROFILER_DEEPPROFILER.out.deepprofiler, platemap)
 
-    profile_input = CYTOPIPE_BRIDGE.out.metadata
+    profile_input = CYTOPIPE_CELLPROFILER_DEEPPROFILER.out.metadata
         .join(CELLPROFILER_DEEPPROFILER.out.images)
         .map { id, locations, index, images -> tuple(id, images, locations, index) }
 
@@ -26,4 +26,6 @@ workflow {
         file(params.deepprofiler_config),
         file(params.deepprofiler_model)
     )
+
+    CYTOPIPE_DEEPPROFILER_PARQUET(DEEPPROFILER_PROFILE.out.features)
 }

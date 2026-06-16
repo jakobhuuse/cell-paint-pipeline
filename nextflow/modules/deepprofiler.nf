@@ -1,7 +1,7 @@
 process DEEPPROFILER_PROFILE {
     tag { plate_id }
     label 'deepprofiler'
-    publishDir { "${params.outdir}/deepprofiler/${plate_id}" }, mode: 'copy'
+    publishDir { "${params.outdir}/deepprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
 
     input:
     tuple val(plate_id),
@@ -12,7 +12,7 @@ process DEEPPROFILER_PROFILE {
     path model,  stageAs: 'outputs/results/checkpoint/*'
 
     output:
-    tuple val(plate_id), path('features'), emit: features
+    tuple val(plate_id), path('*.npz'), emit: features
 
     script:
     """
@@ -27,6 +27,13 @@ process DEEPPROFILER_PROFILE {
         --config=${file(params.deepprofiler_config).name} \\
         profile
 
-    mv outputs/results/features/${plate_id} features
+    # DeepProfiler writes outputs/results/features/<plate>/<Well>/<Site>.npz;
+    # flatten to <Well>_<Site>.npz in the publish directory to comply with cytotable documentation.
+
+    for npz in outputs/results/features/${plate_id}/*/*.npz; do
+        well=\$(basename "\$(dirname "\$npz")")
+        site=\$(basename "\$npz" .npz)
+        mv "\$npz" "\${well}_\${site}.npz"
+    done
     """
 }
