@@ -23,30 +23,57 @@ process CELLPROFILER_ILLUM {
     """
 }
 
-process CELLPROFILER_ANALYSIS {
+process CELLPROFILER_CHUNKS {
     tag { plate_id }
+    label 'cellprofiler'
+
+    input:
+    tuple val(plate_id), path(plate)
+
+    output:
+    tuple val(plate_id), path('chunks.csv'), emit: chunks
+
+    script:
+    """
+    n=\$(find -L "\$(readlink -f ${plate})" -name '*.tif' ! -iname '*_thumb*' | wc -l)
+    sets=\$(( (n + 4) / 5 ))
+    awk -v sets=\$sets -v step=${params.cp_chunk_size} 'BEGIN {
+        for (f = 1; f <= sets; f += step) {
+            l = f + step - 1; if (l > sets) l = sets
+            print f "," l
+        }
+    }' > chunks.csv
+    """
+}
+
+process CELLPROFILER_ANALYSIS {
+    tag { "${plate_id}:${first}-${last}" }
     label 'cellprofiler'
     publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy'
 
     input:
-    tuple val(plate_id), path(illum), path(plate)
+    tuple val(plate_id), path(illum), path(plate), val(first), val(last)
     path cppipe
 
     output:
-    tuple val(plate_id), path('measurement'), emit: measurement
+    tuple val(plate_id), path("${plate_id}_${first}-${last}.sqlite"), emit: measurement
 
     script:
     """
-    mkdir -p measurement
+    mkdir -p out
 
-    find -L "\$(readlink -f ${plate})" -name '*.tif' ! -iname '*_thumb*' > filelist.txt
+    # sort -> deterministic image-set numbering, so -f/-l line up with the chunk ranges
+    find -L "\$(readlink -f ${plate})" -name '*.tif' ! -iname '*_thumb*' | sort > filelist.txt
 
     sed "s|file:ILLUM_PLACEHOLDER|file:\${PWD}/illum|g" ${cppipe} > run_pipeline.cppipe
 
     cellprofiler -c -r \\
         -p run_pipeline.cppipe \\
         --file-list filelist.txt \\
-        -o measurement
+        -f ${first} -l ${last} \\
+        -o out
+
+    mv out/measurements.sqlite ${plate_id}_${first}-${last}.sqlite
     """
 }
 

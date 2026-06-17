@@ -22,17 +22,17 @@ process CYTOPIPE_CELLPROFILER_PARQUET {
     tag { plate_id }
     label 'cytopipe'
     label 'cytotable'
-    publishDir { "${params.outdir}/cytopipe/${plate_id}" }, mode: 'copy'
+    publishDir { "${params.outdir}/" }, mode: 'copy'
 
     input:
-    tuple val(plate_id), path(features)
+    tuple val(plate_id), path(measurement, stageAs: 'measurement/*')
 
     output:
     tuple val(plate_id), path("${plate_id}.parquet"), emit: cellprofiler_parquet
 
     script:
     """
-    cytopipe cellprofiler-parquet ${features} ${plate_id}.parquet
+    cytopipe cellprofiler-parquet measurement ${plate_id}.parquet
     """
 }
 
@@ -40,7 +40,7 @@ process CYTOPIPE_DEEPPROFILER_PARQUET {
     tag { plate_id }
     label 'cytopipe'
     label 'cytotable'
-    publishDir { "${params.outdir}/cytopipe/${plate_id}" }, mode: 'copy'
+    publishDir { "${params.outdir}/" }, mode: 'copy'
 
     input:
     tuple val(plate_id), path(npz, stageAs: 'features/*')
