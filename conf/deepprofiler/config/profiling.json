@@ -2,7 +2,7 @@
   "dataset": {
     "metadata": {
       "label_field": "Metadata_Compound",
-      "control_value": ["EMPTY", "DMSO"]
+      "control_value": ["DMSO"]
     },
     "images": {
       "channels": ["DNA", "RNA", "ER", "AGP", "Mito"],
