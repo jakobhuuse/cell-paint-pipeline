@@ -5,7 +5,7 @@ process DEEPPROFILER_PROFILE {
 
     input:
     tuple val(plate_id),
-          path(images,    stageAs: 'staged/images'),
+          path(images,    stageAs: 'staged/images/*'),
           path(locations, stageAs: 'staged/locations'),
           path(index,     stageAs: 'inputs/metadata/index.csv')
     path config, stageAs: 'inputs/config/*'
@@ -27,9 +27,7 @@ process DEEPPROFILER_PROFILE {
         --config=${file(params.deepprofiler_config).name} \\
         profile
 
-    # DeepProfiler writes outputs/results/features/<plate>/<Well>/<Site>.npz;
-    # flatten to <Well>_<Site>.npz in the publish directory to comply with cytotable documentation.
-
+    # Flatten DeepProfiler's <plate>/<Well>/<Site>.npz to <Well>_<Site>.npz for cytotable.
     for npz in outputs/results/features/${plate_id}/*/*.npz; do
         well=\$(basename "\$(dirname "\$npz")")
         site=\$(basename "\$npz" .npz)

@@ -4,7 +4,9 @@ process CYTOPIPE_CELLPROFILER_DEEPPROFILER {
     publishDir { "${params.outdir}/cytopipe/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
 
     input:
-    tuple val(plate_id), path(deepprofiler)
+    tuple val(plate_id),
+          path('measurement/Image.csv'),
+          path(locations, stageAs: 'measurement/locations/*')
     path platemap
 
     output:
@@ -14,7 +16,7 @@ process CYTOPIPE_CELLPROFILER_DEEPPROFILER {
 
     script:
     """
-    cytopipe bridge ${deepprofiler} deepprofiler ${platemap}
+    cytopipe cellprofiler-deepprofiler measurement deepprofiler ${platemap}
     """
 }
 
