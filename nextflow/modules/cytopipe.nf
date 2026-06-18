@@ -14,7 +14,7 @@ process CYTOPIPE_CELLPROFILER_DEEPPROFILER {
 
     script:
     """
-    cytopipe cellprofiler-deepprofiler ${deepprofiler} deepprofiler ${platemap}
+    cytopipe bridge ${deepprofiler} deepprofiler ${platemap}
     """
 }
 
@@ -32,7 +32,7 @@ process CYTOPIPE_CELLPROFILER_PARQUET {
 
     script:
     """
-    cytopipe cellprofiler-parquet measurement ${plate_id}.parquet
+    cytopipe convert cellprofiler measurement ${plate_id}.parquet
     """
 }
 
@@ -50,7 +50,7 @@ process CYTOPIPE_DEEPPROFILER_PARQUET {
 
     script:
     """
-    cytopipe deepprofiler-parquet features ${plate_id}.parquet
+    cytopipe convert deepprofiler features ${plate_id}.parquet
     """
 }
 
