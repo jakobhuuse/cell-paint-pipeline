@@ -1,15 +1,10 @@
-// Plate input images for CellProfiler's --file-list (thumbnails excluded).
-def tifFind(plate) {
-    "find -L \"\$(readlink -f ${plate})\" -name '*.tif' ! -iname '*_thumb*'"
-}
-
 process CELLPROFILER_ILLUM {
     tag { plate_id }
     label 'cellprofiler'
     publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
 
     input:
-    tuple val(plate_id), path(plate)
+    tuple val(plate_id), path(images, stageAs: 'images/*')
     path cppipe
 
     output:
@@ -18,8 +13,7 @@ process CELLPROFILER_ILLUM {
     script:
     """
     mkdir -p illum
-
-    ${tifFind(plate)} > filelist.txt
+    readlink -f images/*.tif > filelist.txt
 
     cellprofiler -c -r \\
         -p ${cppipe} \\
@@ -28,106 +22,89 @@ process CELLPROFILER_ILLUM {
     """
 }
 
-process CELLPROFILER_CHUNKS {
-    tag { plate_id }
-    label 'cellprofiler'
-
-    input:
-    tuple val(plate_id), path(plate)
-
-    output:
-    tuple val(plate_id), path('chunks.csv'), emit: chunks
-
-    script:
-    """
-    n=\$(${tifFind(plate)} | wc -l)
-    sets=\$(( (n + 4) / 5 ))
-    awk -v sets=\$sets -v step=${params.cp_chunk_size} 'BEGIN {
-        for (f = 1; f <= sets; f += step) {
-            l = f + step - 1; if (l > sets) l = sets
-            print f "," l
-        }
-    }' > chunks.csv
-    """
-}
-
 process CELLPROFILER_ANALYSIS {
-    tag { "${plate_id}:${first}-${last}" }
+    tag { plate_id }
     label 'cellprofiler'
     publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
 
     input:
-    tuple val(plate_id), path(illum), path(plate), val(first), val(last)
+    tuple val(plate_id), path(illum), path(images, stageAs: 'images/*')
     path cppipe
 
     output:
-    tuple val(plate_id), path("${plate_id}_${first}-${last}.sqlite"), emit: measurement
+    tuple val(plate_id), path("${plate_id}.sqlite"), emit: measurement
 
     script:
     """
     mkdir -p out
-
-    # sort -> deterministic image-set numbering, so -f/-l line up with the chunk ranges
-    ${tifFind(plate)} | sort > filelist.txt
+    readlink -f images/*.tif > filelist.txt
 
     sed "s|file:ILLUM_PLACEHOLDER|file:\${PWD}/illum|g" ${cppipe} > run_pipeline.cppipe
 
     cellprofiler -c -r \\
         -p run_pipeline.cppipe \\
         --file-list filelist.txt \\
-        -f ${first} -l ${last} \\
         -o out
 
-    mv out/measurements.sqlite ${plate_id}_${first}-${last}.sqlite
+    mv out/measurements.sqlite ${plate_id}.sqlite
     """
 }
 
 process CELLPROFILER_DEEPPROFILER {
-    tag { "${plate_id}:${first}-${last}" }
+    tag { plate_id }
     label 'cellprofiler'
     publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
 
     input:
-    tuple val(plate_id), path(illum), path(plate), val(first), val(last)
+    tuple val(plate_id), path(illum), path(images, stageAs: 'images/*')
     path cppipe
 
     output:
-    tuple val(plate_id), path('deepprofiler/Image.csv'),             emit: image_csv
-    tuple val(plate_id), path('deepprofiler/locations/*-Nuclei.csv'), emit: locations
-    tuple val(plate_id), path('deepprofiler/images/*'),              emit: images
+    tuple val(plate_id), path('out/Image.csv'),              emit: image_csv
+    tuple val(plate_id), path('out/locations/*-Nuclei.csv'), emit: locations
+    tuple val(plate_id), path('out/images/*'),               emit: images
 
     script:
     """
-    mkdir -p deepprofiler
-
-    # sort -> deterministic image-set numbering, so -f/-l line up with the chunk ranges
-    ${tifFind(plate)} | sort > filelist.txt
+    mkdir -p out
+    readlink -f images/*.tif > filelist.txt
 
     sed "s|file:ILLUM_PLACEHOLDER|file:\${PWD}/illum|g" ${cppipe} > run_pipeline.cppipe
 
     cellprofiler -c -r \\
         -p run_pipeline.cppipe \\
         --file-list filelist.txt \\
-        -f ${first} -l ${last} \\
-        -o deepprofiler
+        -o out
     """
 }
 
-// Split each plate into cp_chunk_size-site ranges and fan out per-chunk CellProfiler tasks.
-// Shared by the analysis and DeepProfiler workflows.
-workflow CP_CHUNK_TASKS {
-    take:
-        plates   // (plate_id, plate_dir)
-        illum    // (plate_id, illum_dir)
+process CELLPROFILER_ANALYZE {
+    tag { plate_id }
+    label 'cellprofiler'
+    publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
 
-    main:
-        CELLPROFILER_CHUNKS(plates)
+    input:
+    tuple val(plate_id), path(illum), path(images, stageAs: 'images/*')
+    path cppipe
 
-        chunks = CELLPROFILER_CHUNKS.out.chunks
-            .splitCsv(elem: 1)
-            .map { plate_id, row -> tuple(plate_id, row[0] as int, row[1] as int) }
+    output:
+    tuple val(plate_id), path("${plate_id}.sqlite"),         emit: measurement
+    tuple val(plate_id), path('out/Image.csv'),              emit: image_csv
+    tuple val(plate_id), path('out/locations/*-Nuclei.csv'), emit: locations
+    tuple val(plate_id), path('out/images/*'),               emit: images
 
-    emit:
-        // (plate_id, illum, plate, first, last) - one CellProfiler task per chunk
-        illum.join(plates).combine(chunks, by: 0)
+    script:
+    """
+    mkdir -p out
+    readlink -f images/*.tif > filelist.txt
+
+    sed "s|file:ILLUM_PLACEHOLDER|file:\${PWD}/illum|g" ${cppipe} > run_pipeline.cppipe
+
+    cellprofiler -c -r \\
+        -p run_pipeline.cppipe \\
+        --file-list filelist.txt \\
+        -o out
+
+    mv out/measurements.sqlite ${plate_id}.sqlite
+    """
 }

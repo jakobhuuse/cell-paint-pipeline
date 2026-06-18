@@ -16,7 +16,7 @@ process CYTOPIPE_CELLPROFILER_DEEPPROFILER {
 
     script:
     """
-    cytopipe cellprofiler-deepprofiler measurement deepprofiler ${platemap}
+    cytopipe bridge measurement deepprofiler ${platemap}
     """
 }
 
@@ -24,7 +24,7 @@ process CYTOPIPE_CELLPROFILER_PARQUET {
     tag { plate_id }
     label 'cytopipe'
     label 'cytotable'
-    publishDir { "${params.outdir}/" }, mode: 'copy'
+    publishDir { "${params.outdir}/cellprofiler/" }, mode: 'copy'
 
     input:
     tuple val(plate_id), path(measurement, stageAs: 'measurement/*')
@@ -42,7 +42,7 @@ process CYTOPIPE_DEEPPROFILER_PARQUET {
     tag { plate_id }
     label 'cytopipe'
     label 'cytotable'
-    publishDir { "${params.outdir}/" }, mode: 'copy'
+    publishDir { "${params.outdir}/deepprofiler/" }, mode: 'copy'
 
     input:
     tuple val(plate_id), path(npz, stageAs: 'features/*')
