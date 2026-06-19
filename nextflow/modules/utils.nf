@@ -13,3 +13,8 @@ def plateImages() {
 def platemap() {
     file("${params.input_dir}/platemap.csv", checkIfExists: true)
 }
+
+// pycytominer --features list for DeepProfiler embeddings: efficientnet_1..N.
+def deepprofilerFeatures() {
+    (1..params.deepprofiler_embedding_dim).collect { n -> "efficientnet_${n}" }.join(',')
+}

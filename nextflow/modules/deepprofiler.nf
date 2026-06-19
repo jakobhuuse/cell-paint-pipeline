@@ -1,4 +1,4 @@
-process DEEPPROFILER_PROFILE {
+process DEEPPROFILE {
     tag { plate_id }
     label 'deepprofiler'
     publishDir { "${params.outdir}/deepprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates

@@ -1,4 +1,4 @@
-process CYTOPIPE_CELLPROFILER_DEEPPROFILER {
+process CYTOPIPE_BRIDGE {
     tag { plate_id }
     label 'cytopipe'
     publishDir { "${params.outdir}/cytopipe/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
