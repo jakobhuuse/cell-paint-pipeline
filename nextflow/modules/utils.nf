@@ -7,6 +7,7 @@ def plateTifs(dir) {
 def plateImages() {
     channel.fromPath("${params.input_dir}/${params.plate_glob}", type: 'dir')
         .map { dir -> tuple(dir.name, plateTifs(dir)) }
+        .filter { _id, tifs -> tifs } 
 }
 
 // Platemap for the run.
