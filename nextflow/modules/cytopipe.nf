@@ -1,8 +1,7 @@
 process CYTOPIPE_BRIDGE {
     tag { plate_id }
     label 'cytopipe'
-    publishDir { "${params.outdir}/cytopipe/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
-
+    
     input:
     tuple val(plate_id),
           path('measurement/Image.csv'),
@@ -24,7 +23,6 @@ process CYTOPIPE_CELLPROFILER_PARQUET {
     tag { plate_id }
     label 'cytopipe'
     label 'cytotable'
-    publishDir { "${params.outdir}/cellprofiler/" }, mode: 'copy'
 
     input:
     tuple val(plate_id), path(measurement, stageAs: 'measurement/*')
@@ -42,7 +40,6 @@ process CYTOPIPE_DEEPPROFILER_PARQUET {
     tag { plate_id }
     label 'cytopipe'
     label 'cytotable'
-    publishDir { "${params.outdir}/deepprofiler/" }, mode: 'copy'
 
     input:
     tuple val(plate_id), path(npz, stageAs: 'features/*')
@@ -53,6 +50,21 @@ process CYTOPIPE_DEEPPROFILER_PARQUET {
     script:
     """
     cytopipe convert deepprofiler features ${plate_id}.parquet
+    """
+}
+
+process CYTOPIPE_CONCAT {
+    label 'cytopipe'
+
+    input:
+    path 'parts/*'
+
+    output:
+    path 'combined.parquet', emit: combined
+
+    script:
+    """
+    cytopipe convert concat parts combined.parquet
     """
 }
 

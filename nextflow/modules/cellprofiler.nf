@@ -1,8 +1,7 @@
 process CELLPROFILER_ILLUM {
     tag { plate_id }
     label 'cellprofiler'
-    publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
-
+   
     input:
     tuple val(plate_id), path(images, stageAs: 'images/*')
     path cppipe
@@ -25,7 +24,6 @@ process CELLPROFILER_ILLUM {
 process CELLPROFILER_ANALYSIS {
     tag { plate_id }
     label 'cellprofiler'
-    publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
 
     input:
     tuple val(plate_id), path(illum), path(images, stageAs: 'images/*')
@@ -53,7 +51,6 @@ process CELLPROFILER_ANALYSIS {
 process CELLPROFILER_DEEPPROFILER {
     tag { plate_id }
     label 'cellprofiler'
-    publishDir { "${params.outdir}/cellprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
 
     input:
     tuple val(plate_id), path(illum), path(images, stageAs: 'images/*')

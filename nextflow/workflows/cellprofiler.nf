@@ -3,11 +3,19 @@ include { plateImages } from '../modules/utils.nf'
 include { CYTOPIPE_CELLPROFILER_PARQUET } from '../modules/cytopipe.nf'
 
 workflow {
+    main:
     images = plateImages()
 
-    CELLPROFILER_ILLUM(images, file(params.illum_cppipe))
+    illum = CELLPROFILER_ILLUM(images, file(params.illum_cppipe))
 
-    CELLPROFILER_ANALYSIS(CELLPROFILER_ILLUM.out.illum.join(images), file(params.analysis_cppipe))
+    analysis = CELLPROFILER_ANALYSIS(illum.illum.join(images), file(params.analysis_cppipe))
 
-    CYTOPIPE_CELLPROFILER_PARQUET(CELLPROFILER_ANALYSIS.out.measurement)
+    single_cell = CYTOPIPE_CELLPROFILER_PARQUET(analysis.measurement)
+
+    publish:
+    cellprofiler_parquet = single_cell.cellprofiler_parquet
+}
+
+output {
+    cellprofiler_parquet { path 'cellprofiler' ; mode 'copy' }
 }

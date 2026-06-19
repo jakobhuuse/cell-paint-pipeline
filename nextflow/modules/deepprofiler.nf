@@ -1,8 +1,7 @@
 process DEEPPROFILE {
     tag { plate_id }
     label 'deepprofiler'
-    publishDir { "${params.outdir}/deepprofiler/${plate_id}" }, mode: 'copy', enabled: params.publish_intermediates
-
+   
     input:
     tuple val(plate_id),
           path(images,    stageAs: 'staged/images/*'),

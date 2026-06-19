@@ -5,7 +5,6 @@
 process PYCYTOMINER_AGGREGATE {
     tag { plate_id }
     label 'pycytominer'
-    publishDir { "${params.outdir}/pycytominer/${plate_id}" }, mode: 'copy'
 
     input:
     tuple val(plate_id), path(profiles)
@@ -28,7 +27,6 @@ process PYCYTOMINER_AGGREGATE {
 process PYCYTOMINER_ANNOTATE {
     tag { plate_id }
     label 'pycytominer'
-    publishDir { "${params.outdir}/pycytominer/${plate_id}" }, mode: 'copy'
 
     input:
     tuple val(plate_id), path(profiles)
@@ -50,7 +48,6 @@ process PYCYTOMINER_ANNOTATE {
 process PYCYTOMINER_NORMALIZE {
     tag { plate_id }
     label 'pycytominer'
-    publishDir { "${params.outdir}/pycytominer/${plate_id}" }, mode: 'copy'
 
     input:
     tuple val(plate_id), path(profiles)
@@ -71,22 +68,20 @@ process PYCYTOMINER_NORMALIZE {
 }
 
 process PYCYTOMINER_FEATURE_SELECT {
-    tag { plate_id }
     label 'pycytominer'
-    publishDir { "${params.outdir}/pycytominer/${plate_id}" }, mode: 'copy'
 
     input:
-    tuple val(plate_id), path(profiles)
+    path profiles
     val features
 
     output:
-    tuple val(plate_id), path("${plate_id}.feature_select.parquet"), emit: selected
+    path 'feature_select.parquet', emit: selected
 
     script:
     """
     pycytominer feature_select \\
         --profiles "${profiles}" \\
-        --output_file "${plate_id}.feature_select.parquet" \\
+        --output_file feature_select.parquet \\
         --operation "${params.pycytominer_feature_select_ops}" \\
         --features "${features}" \\
         --output_type parquet
@@ -94,22 +89,20 @@ process PYCYTOMINER_FEATURE_SELECT {
 }
 
 process PYCYTOMINER_CONSENSUS {
-    tag { plate_id }
     label 'pycytominer'
-    publishDir { "${params.outdir}/pycytominer/${plate_id}" }, mode: 'copy'
 
     input:
-    tuple val(plate_id), path(profiles)
+    path profiles
     val features
 
     output:
-    tuple val(plate_id), path("${plate_id}.consensus.parquet"), emit: consensus
+    path 'consensus.parquet', emit: consensus
 
     script:
     """
     pycytominer consensus \\
         --profiles "${profiles}" \\
-        --output_file "${plate_id}.consensus.parquet" \\
+        --output_file consensus.parquet \\
         --replicate_columns "${params.pycytominer_consensus_columns}" \\
         --features "${features}" \\
         --output_type parquet
