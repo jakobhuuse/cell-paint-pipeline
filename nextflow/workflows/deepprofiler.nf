@@ -1,5 +1,5 @@
 include { CELLPROFILER_ILLUM; CELLPROFILER_DEEPPROFILER } from '../modules/cellprofiler.nf'
-include { plateImages; platemap; deepprofilerFeatures; cellprofilerChunks } from '../modules/utils.nf'
+include { plateImages; platemap; deepprofilerFeatures; cellprofilerChunks } from '../utils.nf'
 include { CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_CONCAT } from '../modules/cytopipe.nf'
 include { DEEPPROFILE } from '../modules/deepprofiler.nf'
 include { PYCYTOMINER_AGGREGATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
@@ -60,7 +60,7 @@ workflow {
 }
 
 output {
-    raw_profiles { path 'deepprofiler/raw' ; mode 'copy' }
-    normalized_profiles { path 'deepprofiler/normalized' ; mode 'copy' }
-    consensus_profiles  { path 'deepprofiler' ; mode 'copy' }
+    raw_profiles { path 'deepprofiler/raw' }
+    normalized_profiles { path 'deepprofiler/normalized' }
+    consensus_profiles  { path 'deepprofiler' }
 }

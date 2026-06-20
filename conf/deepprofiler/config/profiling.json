@@ -59,6 +59,6 @@
   "profile": {
     "feature_layer": "block6a_activation",
     "checkpoint": "Cell_Painting_CNN_v1.hdf5",
-    "batch_size": 32
+    "batch_size": 64
   }
 }

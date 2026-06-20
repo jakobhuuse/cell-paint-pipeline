@@ -1,5 +1,5 @@
 include { CELLPROFILER_ILLUM; CELLPROFILER_ANALYSIS } from '../modules/cellprofiler.nf'
-include { plateImages; cellprofilerChunks } from '../modules/utils.nf'
+include { plateImages; cellprofilerChunks } from '../utils.nf'
 include { CYTOPIPE_CELLPROFILER_PARQUET } from '../modules/cytopipe.nf'
 
 workflow {
@@ -22,5 +22,5 @@ workflow {
 }
 
 output {
-    raw_profiles { path 'cellprofiler/raw' ; mode 'copy' }
+    raw_profiles { path 'cellprofiler/raw' }
 }
