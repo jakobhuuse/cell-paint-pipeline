@@ -1,5 +1,5 @@
 include { CELLPROFILER_ILLUM; CELLPROFILER_ANALYSIS } from '../modules/cellprofiler.nf'
-include { plateImages } from '../modules/utils.nf'
+include { plateImages; cellprofilerChunks } from '../modules/utils.nf'
 include { CYTOPIPE_CELLPROFILER_PARQUET } from '../modules/cytopipe.nf'
 
 workflow {
@@ -8,14 +8,19 @@ workflow {
 
     illum = CELLPROFILER_ILLUM(images, file(params.illum_cppipe))
 
-    analysis = CELLPROFILER_ANALYSIS(illum.illum.join(images), file(params.analysis_cppipe))
+    chunks = cellprofilerChunks(illum.illum.join(images), params.cellprofiler_chunk_size)
 
-    single_cell = CYTOPIPE_CELLPROFILER_PARQUET(analysis.measurement)
+    analysis = CELLPROFILER_ANALYSIS(chunks, file(params.analysis_cppipe))
+
+    // Regroup per-chunk sqlites per plate.
+    measurement = analysis.measurement.groupTuple()
+
+    single_cell = CYTOPIPE_CELLPROFILER_PARQUET(measurement)
 
     publish:
-    cellprofiler_parquet = single_cell.cellprofiler_parquet
+    raw_profiles = single_cell.cellprofiler_parquet
 }
 
 output {
-    cellprofiler_parquet { path 'cellprofiler' ; mode 'copy' }
+    raw_profiles { path 'cellprofiler/raw' ; mode 'copy' }
 }

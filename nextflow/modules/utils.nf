@@ -10,6 +10,18 @@ def plateImages() {
         .filter { _id, tifs -> tifs } 
 }
 
+// Fan a per-plate (plate_id, illum, images) channel out into image-set chunks
+def cellprofilerChunks(ch, chunkSize) {
+    ch.flatMap { plate_id, illum_dir, imgs ->
+        int sites = imgs.size().intdiv(5)
+        int sz = chunkSize as int
+        (1..sites).step(sz).collect { first ->
+            int last = Math.min((first + sz) - 1, sites)
+            tuple(plate_id, first, last, illum_dir, imgs)
+        }
+    }
+}
+
 // Platemap for the run.
 def platemap() {
     file("${params.input_dir}/platemap.csv", checkIfExists: true)

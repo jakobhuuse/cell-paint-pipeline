@@ -1,5 +1,5 @@
 include { CELLPROFILER_ILLUM; CELLPROFILER_DEEPPROFILER } from '../modules/cellprofiler.nf'
-include { plateImages; platemap; deepprofilerFeatures } from '../modules/utils.nf'
+include { plateImages; platemap; deepprofilerFeatures; cellprofilerChunks } from '../modules/utils.nf'
 include { CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_CONCAT } from '../modules/cytopipe.nf'
 include { DEEPPROFILE } from '../modules/deepprofiler.nf'
 include { PYCYTOMINER_AGGREGATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
@@ -10,15 +10,30 @@ workflow {
 
     illum = CELLPROFILER_ILLUM(images, file(params.illum_cppipe))
 
-    cellprofiler = CELLPROFILER_DEEPPROFILER(illum.illum.join(images), file(params.deepprofiler_cppipe))
+    chunks = cellprofilerChunks(illum.illum.join(images), params.cellprofiler_chunk_size)
+
+    cellprofiler = CELLPROFILER_DEEPPROFILER(chunks, file(params.deepprofiler_cppipe))
+
+    //Regroup data from different chunks
+    image_csv = cellprofiler.image_csv
+        .collectFile(keepHeader: true, skip: 1) { plate_id, csv -> ["${plate_id}.Image.csv", csv] }
+        .map { f -> tuple(f.name.replaceFirst(/\.Image\.csv$/, ''), f) }
+
+    locations = cellprofiler.locations
+        .groupTuple()
+        .map { plate_id, nested -> tuple(plate_id, nested.flatten()) }
+
+    corrected_images = cellprofiler.images
+        .groupTuple()
+        .map { plate_id, nested -> tuple(plate_id, nested.flatten()) }
 
     bridge = CYTOPIPE_BRIDGE(
-        cellprofiler.image_csv.join(cellprofiler.locations),
+        image_csv.join(locations),
         platemap()
     )
 
     profile_input = bridge.metadata
-        .join(cellprofiler.images)
+        .join(corrected_images)
         .map { plate_id, locations_dir, index, imgs -> tuple(plate_id, imgs, locations_dir, index) }
 
     profiled = DEEPPROFILE(
@@ -39,11 +54,13 @@ workflow {
     consensus = PYCYTOMINER_CONSENSUS(cohort.combined, features)
 
     publish:
+    raw_profiles = single_cell.deepprofiler_parquet
     normalized_profiles = normalized.normalized
     consensus_profiles  = consensus.consensus
 }
 
 output {
-    normalized_profiles { path 'deepprofiler' ; mode 'copy' }
+    raw_profiles { path 'deepprofiler/raw' ; mode 'copy' }
+    normalized_profiles { path 'deepprofiler/normalized' ; mode 'copy' }
     consensus_profiles  { path 'deepprofiler' ; mode 'copy' }
 }

@@ -22,15 +22,15 @@ process CELLPROFILER_ILLUM {
 }
 
 process CELLPROFILER_ANALYSIS {
-    tag { plate_id }
+    tag { "${plate_id} ${first}-${last}" }
     label 'cellprofiler'
 
     input:
-    tuple val(plate_id), path(illum), path(images, stageAs: 'images/*')
+    tuple val(plate_id), val(first), val(last), path(illum), path(images, stageAs: 'images/*')
     path cppipe
 
     output:
-    tuple val(plate_id), path("${plate_id}.sqlite"), emit: measurement
+    tuple val(plate_id), path("${plate_id}.${first}-${last}.sqlite"), emit: measurement
 
     script:
     """
@@ -42,18 +42,19 @@ process CELLPROFILER_ANALYSIS {
     cellprofiler -c -r \\
         -p run_pipeline.cppipe \\
         --file-list filelist.txt \\
+        -f ${first} -l ${last} \\
         -o out
 
-    mv out/measurements.sqlite ${plate_id}.sqlite
+    mv out/measurements.sqlite ${plate_id}.${first}-${last}.sqlite
     """
 }
 
 process CELLPROFILER_DEEPPROFILER {
-    tag { plate_id }
+    tag { "${plate_id} ${first}-${last}" }
     label 'cellprofiler'
 
     input:
-    tuple val(plate_id), path(illum), path(images, stageAs: 'images/*')
+    tuple val(plate_id), val(first), val(last), path(illum), path(images, stageAs: 'images/*')
     path cppipe
 
     output:
@@ -71,6 +72,7 @@ process CELLPROFILER_DEEPPROFILER {
     cellprofiler -c -r \\
         -p run_pipeline.cppipe \\
         --file-list filelist.txt \\
+        -f ${first} -l ${last} \\
         -o out
     """
 }
