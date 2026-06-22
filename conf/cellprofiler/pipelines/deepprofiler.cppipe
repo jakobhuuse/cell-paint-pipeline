@@ -106,7 +106,7 @@ IdentifyPrimaryObjects:[module_num:5|svn_version:'Unknown'|variable_revision_num
     Maximum number of objects:500
     Use advanced settings?:No
     Threshold setting version:12
-    Threshold strategy:Global
+    Threshold strategy:Adaptive
     Thresholding method:Minimum Cross-Entropy
     Threshold smoothing scale:1.3488
     Threshold correction factor:1.0
