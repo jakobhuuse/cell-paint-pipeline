@@ -1,61 +1,79 @@
+nextflow.enable.types = true
+
 include { CELLPROFILER_DEEPPROFILER } from '../modules/cellprofiler.nf'
 include { plateImages; platemap; deepprofilerFeatures; imageChunks } from '../utils.nf'
 include { CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_CONCAT } from '../modules/cytopipe.nf'
 include { DEEPPROFILER_PREPARE; DEEPPROFILE } from '../modules/deepprofiler.nf'
 include { PYCYTOMINER_AGGREGATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
+// Types only; values come from nextflow.config (or --param overrides).
+params {
+    input_dir: String
+    plate_glob: String
+    cellprofiler_chunk_size: Integer
+    deepprofiler_cppipe: String
+    deepprofiler_config: String
+    deepprofiler_model: String
+    deepprofiler_embedding_dim: Integer
+    pycytominer_aggregate_strata: String
+    pycytominer_normalize_samples: String
+    pycytominer_consensus_columns: String
+}
+
 workflow {
     main:
     images = plateImages()
 
+    // CellProfiler segments nuclei only; DeepProfiler's prepare does illum correction.
     chunks = imageChunks(images, params.cellprofiler_chunk_size)
 
     cellprofiler = CELLPROFILER_DEEPPROFILER(chunks, file(params.deepprofiler_cppipe))
 
-    //Regroup data from different chunks
+    // Regroup chunk outputs per plate. collectFile emits a plain file, re-wrapped to a record.
     image_csv = cellprofiler.image_csv
-        .collectFile(keepHeader: true, skip: 1) { plate_id, csv -> ["${plate_id}.Image.csv", csv] }
-        .map { f -> tuple(f.name.replaceFirst(/\.Image\.csv$/, ''), f) }
+        .collectFile(keepHeader: true, skip: 1) { r -> ["${r.id}.Image.csv", r.image_csv] }
+        .map { f ->
+            Path csv = file(f)
+            record(id: csv.name.replaceFirst(/\.Image\.csv$/, ''), image_csv: csv)
+        }
 
+    // groupTuple has no field `by`, so key by id with a transient tuple.
     locations = cellprofiler.locations
-        .groupTuple()
-        .map { plate_id, nested -> tuple(plate_id, nested.flatten()) }
+        .map { r -> tuple(r.id, r.locations) }
+        .groupTuple(by: 0)
+        .map { id, nested -> record(id: id, locations: nested.flatten()) }
 
-    bridge = CYTOPIPE_BRIDGE(
-        image_csv.join(locations),
-        platemap()
-    )
+    bridge = CYTOPIPE_BRIDGE(image_csv.join(locations, by: 'id'), platemap())
 
+    // Illumination correction + compression on the raw images, keyed by the index.
     prepared = DEEPPROFILER_PREPARE(
-        images.join(bridge.metadata).map { plate_id, imgs, _locations_dir, index -> tuple(plate_id, imgs, index) },
-        file(params.deepprofiler_config)
+        images.join(bridge, by: 'id').map { r -> record(id: r.id, images: r.images, index: r.index) },
+        file(params.deepprofiler_config),
     )
-
-    profile_input = prepared.compressed
-        .join(bridge.metadata)
-        .map { plate_id, compressed, locations_dir, index -> tuple(plate_id, compressed, locations_dir, index) }
 
     profiled = DEEPPROFILE(
-        profile_input,
+        prepared.join(bridge, by: 'id').map { r ->
+            record(id: r.id, compressed: r.compressed, locations: r.locations, index: r.index)
+        },
         file(params.deepprofiler_config),
-        file(params.deepprofiler_model)
+        file(params.deepprofiler_model),
     )
 
-    single_cell = CYTOPIPE_DEEPPROFILER_PARQUET(profiled.features)
+    single_cell = CYTOPIPE_DEEPPROFILER_PARQUET(profiled)
 
     features = deepprofilerFeatures()
 
-    aggregated = PYCYTOMINER_AGGREGATE(single_cell.deepprofiler_parquet, features)
-    normalized = PYCYTOMINER_NORMALIZE(aggregated.aggregated, features)
+    aggregated = PYCYTOMINER_AGGREGATE(single_cell, features)
+    normalized = PYCYTOMINER_NORMALIZE(aggregated, features)
 
-    cohort = CYTOPIPE_CONCAT(normalized.normalized.map { _plate_id, profiles -> profiles }.collect())
+    cohort = CYTOPIPE_CONCAT(normalized.map { r -> r.parquet }.collect())
 
-    consensus = PYCYTOMINER_CONSENSUS(cohort.combined, features)
+    consensus = PYCYTOMINER_CONSENSUS(cohort.map { r -> r.combined }, features)
 
     publish:
-    raw_profiles = single_cell.deepprofiler_parquet
-    normalized_profiles = normalized.normalized
-    consensus_profiles  = consensus.consensus
+    raw_profiles = single_cell.map { r -> r.parquet }
+    normalized_profiles = normalized.map { r -> r.parquet }
+    consensus_profiles = consensus.map { r -> r.consensus }
 }
 
 output {

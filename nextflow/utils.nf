@@ -1,32 +1,47 @@
+nextflow.enable.types = true
+
+include { Plate; ImageChunk; IllumChunk } from './types.nf'
+
+// Helpers build typed records as channel payloads. Channel-level type annotations
+// on these functions are omitted: a dataflow channel cannot be cast to the typed
+// `Channel<T>` at runtime (static typing is still a preview feature).
+
 // Sorted CellProfiler input images for a plate (thumbnails excluded).
 def plateTifs(dir) {
-    files("${dir}/**/*.tif").findAll { tif -> !tif.name.toLowerCase().contains('_thumb') }.sort()
+    files("${dir}/**/*.tif").toSorted().findAll { tif -> !tif.name.toLowerCase().contains('_thumb') }
 }
 
-// Per-plate input images: (plate_id, [sorted tifs]).
+// Per-plate input images -> Plate records.
 def plateImages() {
     channel.fromPath("${params.input_dir}/${params.plate_glob}", type: 'dir')
-        .map { dir -> tuple(dir.name, plateTifs(dir)) }
-        .filter { _id, tifs -> tifs } 
+        .map { dir -> record(id: dir.name, images: plateTifs(dir)) }
+        .filter { p -> p.images.size() > 0 }
 }
 
-// Fan a per-plate (plate_id, images) channel out into image-set chunks:
+// Fan a per-plate Plate channel out into ImageChunk records (5 channels per site).
 def imageChunks(ch, chunkSize) {
-    ch.flatMap { plate_id, imgs ->
-        int sites = imgs.size().intdiv(5)
-        int sz = chunkSize as int
-        (1..sites).step(sz).collect { first ->
-            int last = Math.min((first + sz) - 1, sites)
-            tuple(plate_id, first, last, imgs)
+    ch.flatMap { plate ->
+        int sites = plate.images.size().intdiv(5)
+        int nChunks = (sites + chunkSize - 1).intdiv(chunkSize)
+        (0 ..< nChunks).collect { k ->
+            int first = (k * chunkSize) + 1
+            int last = Math.min((first + chunkSize) - 1, sites)
+            record(id: plate.id, first: first, last: last, images: plate.images)
         }
     }
 }
 
-// As imageChunks, but carries the per-plate illum dir.
+// As imageChunks, but carries the per-plate illum dir as IllumChunk records.
+// `combine` has no field-name `by`, so a transient (id, ...) tuple re-attaches it.
 def cellprofilerChunks(ch, chunkSize) {
-    imageChunks(ch.map { plate_id, _illum, imgs -> tuple(plate_id, imgs) }, chunkSize)
-        .combine(ch.map { plate_id, illum, _imgs -> tuple(plate_id, illum) }, by: 0)
-        .map { plate_id, first, last, imgs, illum -> tuple(plate_id, first, last, illum, imgs) }
+    def chunks = imageChunks(ch.map { r -> record(id: r.id, images: r.images) }, chunkSize)
+    def illum  = ch.map { r -> tuple(r.id, r.illum) }
+    chunks
+        .map { c -> tuple(c.id, c) }
+        .combine(illum, by: 0)
+        .map { id, chunk, illumDir ->
+            record(id: id, first: chunk.first, last: chunk.last, illum: illumDir, images: chunk.images)
+        }
 }
 
 // Platemap for the run.
@@ -36,5 +51,6 @@ def platemap() {
 
 // pycytominer --features list for DeepProfiler embeddings: efficientnet_1..N.
 def deepprofilerFeatures() {
-    (1..params.deepprofiler_embedding_dim).collect { n -> "efficientnet_${n}" }.join(',')
+    int dim = params.deepprofiler_embedding_dim as Integer
+    (1..dim).collect { n -> "efficientnet_${n}" }.join(',')
 }

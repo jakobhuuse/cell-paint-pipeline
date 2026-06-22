@@ -1,13 +1,20 @@
+nextflow.enable.types = true
+
+include { Plate; ImageChunk; IllumChunk } from '../types.nf'
+
 process CELLPROFILER_ILLUM {
-    tag { plate_id }
+    tag { plate.id }
     label 'cellprofiler'
-   
+
     input:
-    tuple val(plate_id), path(images, stageAs: 'images/*')
-    path cppipe
+    plate: Plate
+    cppipe: Path
+
+    stage:
+    stageAs plate.images, 'images/*'
 
     output:
-    tuple val(plate_id), path('illum'), emit: illum
+    record(id: plate.id, illum: file('illum', type: 'dir'))
 
     script:
     """
@@ -22,15 +29,19 @@ process CELLPROFILER_ILLUM {
 }
 
 process CELLPROFILER_ANALYSIS {
-    tag { "${plate_id} ${first}-${last}" }
+    tag { "${chunk.id} ${chunk.first}-${chunk.last}" }
     label 'cellprofiler'
 
     input:
-    tuple val(plate_id), val(first), val(last), path(illum), path(images, stageAs: 'images/*')
-    path cppipe
+    chunk: IllumChunk
+    cppipe: Path
+
+    stage:
+    stageAs chunk.illum, 'illum'
+    stageAs chunk.images, 'images/*'
 
     output:
-    tuple val(plate_id), path("${plate_id}.${first}-${last}.sqlite"), emit: measurement
+    record(id: chunk.id, measurement: file("${chunk.id}.${chunk.first}-${chunk.last}.sqlite"))
 
     script:
     """
@@ -42,25 +53,29 @@ process CELLPROFILER_ANALYSIS {
     cellprofiler -c -r \\
         -p run_pipeline.cppipe \\
         --file-list filelist.txt \\
-        -f ${first} -l ${last} \\
+        -f ${chunk.first} -l ${chunk.last} \\
         -o out
 
-    mv out/measurements.sqlite ${plate_id}.${first}-${last}.sqlite
+    mv out/measurements.sqlite ${chunk.id}.${chunk.first}-${chunk.last}.sqlite
     """
 }
 
-// Identifies nuclei locations from raw images.
+// Segmentation only: identifies nuclei locations from raw images. Illumination
+// correction is handled downstream by DeepProfiler's prepare step.
 process CELLPROFILER_DEEPPROFILER {
-    tag { "${plate_id} ${first}-${last}" }
+    tag { "${chunk.id} ${chunk.first}-${chunk.last}" }
     label 'cellprofiler'
 
     input:
-    tuple val(plate_id), val(first), val(last), path(images, stageAs: 'images/*')
-    path cppipe
+    chunk: ImageChunk
+    cppipe: Path
+
+    stage:
+    stageAs chunk.images, 'images/*'
 
     output:
-    tuple val(plate_id), path('out/Image.csv'),              emit: image_csv
-    tuple val(plate_id), path('out/locations/*-Nuclei.csv'), emit: locations
+    image_csv = record(id: chunk.id, image_csv: file('out/Image.csv'))
+    locations = record(id: chunk.id, locations: files('out/locations/*-Nuclei.csv'))
 
     script:
     """
@@ -70,7 +85,7 @@ process CELLPROFILER_DEEPPROFILER {
     cellprofiler -c -r \\
         -p ${cppipe} \\
         --file-list filelist.txt \\
-        -f ${first} -l ${last} \\
+        -f ${chunk.first} -l ${chunk.last} \\
         -o out
     """
 }
