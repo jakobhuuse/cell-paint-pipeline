@@ -29,7 +29,7 @@ raw images
   | Stage | Image | Source |
   |-------|-------|--------|
   | CellProfiler | `cellprofiler/cellprofiler:4.2.8` | official, pinned |
-  | DeepProfiler | `…/deepprofiler` | built here (`containers/deepprofiler/`, GPU/TF) |
+  | DeepProfiler | `…/deepprofiler` | thin image over the [`deepprofiler` PyPI package](https://pypi.org/project/deepprofiler/), built here (`containers/deepprofiler/`, GPU/TF) |
   | pycytominer | `cytomining/pycytominer` | official, pinned (built-in CLI) |
   | cytopipe | `ghcr.io/jakobhuuse/cytopipe` | built from the [cytopipe repo](https://github.com/jakobhuuse/cytopipe) (our code) |
 

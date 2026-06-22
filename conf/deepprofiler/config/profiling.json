@@ -19,8 +19,13 @@
   },
 
   "prepare": {
+    "illumination_correction": {
+        "down_scale_factor": 4,
+        "median_filter_size": 24
+    },
     "compression": {
-      "implement": false
+        "implement": true,
+        "scaling_factor": 1.0
     }
   },
 

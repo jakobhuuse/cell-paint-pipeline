@@ -49,28 +49,26 @@ process CELLPROFILER_ANALYSIS {
     """
 }
 
+// Identifies nuclei locations from raw images.
 process CELLPROFILER_DEEPPROFILER {
     tag { "${plate_id} ${first}-${last}" }
     label 'cellprofiler'
 
     input:
-    tuple val(plate_id), val(first), val(last), path(illum), path(images, stageAs: 'images/*')
+    tuple val(plate_id), val(first), val(last), path(images, stageAs: 'images/*')
     path cppipe
 
     output:
     tuple val(plate_id), path('out/Image.csv'),              emit: image_csv
     tuple val(plate_id), path('out/locations/*-Nuclei.csv'), emit: locations
-    tuple val(plate_id), path('out/images/*'),               emit: images
 
     script:
     """
     mkdir -p out
     readlink -f images/*.tif > filelist.txt
 
-    sed "s|file:ILLUM_PLACEHOLDER|file:\${PWD}/illum|g" ${cppipe} > run_pipeline.cppipe
-
     cellprofiler -c -r \\
-        -p run_pipeline.cppipe \\
+        -p ${cppipe} \\
         --file-list filelist.txt \\
         -f ${first} -l ${last} \\
         -o out

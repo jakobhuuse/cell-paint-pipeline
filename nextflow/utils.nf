@@ -10,16 +10,23 @@ def plateImages() {
         .filter { _id, tifs -> tifs } 
 }
 
-// Fan a per-plate (plate_id, illum, images) channel out into image-set chunks
-def cellprofilerChunks(ch, chunkSize) {
-    ch.flatMap { plate_id, illum_dir, imgs ->
+// Fan a per-plate (plate_id, images) channel out into image-set chunks:
+def imageChunks(ch, chunkSize) {
+    ch.flatMap { plate_id, imgs ->
         int sites = imgs.size().intdiv(5)
         int sz = chunkSize as int
         (1..sites).step(sz).collect { first ->
             int last = Math.min((first + sz) - 1, sites)
-            tuple(plate_id, first, last, illum_dir, imgs)
+            tuple(plate_id, first, last, imgs)
         }
     }
+}
+
+// As imageChunks, but carries the per-plate illum dir.
+def cellprofilerChunks(ch, chunkSize) {
+    imageChunks(ch.map { plate_id, _illum, imgs -> tuple(plate_id, imgs) }, chunkSize)
+        .combine(ch.map { plate_id, illum, _imgs -> tuple(plate_id, illum) }, by: 0)
+        .map { plate_id, first, last, imgs, illum -> tuple(plate_id, first, last, illum, imgs) }
 }
 
 // Platemap for the run.

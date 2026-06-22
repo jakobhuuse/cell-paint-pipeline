@@ -1,16 +1,14 @@
-include { CELLPROFILER_ILLUM; CELLPROFILER_DEEPPROFILER } from '../modules/cellprofiler.nf'
-include { plateImages; platemap; deepprofilerFeatures; cellprofilerChunks } from '../utils.nf'
+include { CELLPROFILER_DEEPPROFILER } from '../modules/cellprofiler.nf'
+include { plateImages; platemap; deepprofilerFeatures; imageChunks } from '../utils.nf'
 include { CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_CONCAT } from '../modules/cytopipe.nf'
-include { DEEPPROFILE } from '../modules/deepprofiler.nf'
+include { DEEPPROFILER_PREPARE; DEEPPROFILE } from '../modules/deepprofiler.nf'
 include { PYCYTOMINER_AGGREGATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
 workflow {
     main:
     images = plateImages()
 
-    illum = CELLPROFILER_ILLUM(images, file(params.illum_cppipe))
-
-    chunks = cellprofilerChunks(illum.illum.join(images), params.cellprofiler_chunk_size)
+    chunks = imageChunks(images, params.cellprofiler_chunk_size)
 
     cellprofiler = CELLPROFILER_DEEPPROFILER(chunks, file(params.deepprofiler_cppipe))
 
@@ -23,18 +21,19 @@ workflow {
         .groupTuple()
         .map { plate_id, nested -> tuple(plate_id, nested.flatten()) }
 
-    corrected_images = cellprofiler.images
-        .groupTuple()
-        .map { plate_id, nested -> tuple(plate_id, nested.flatten()) }
-
     bridge = CYTOPIPE_BRIDGE(
         image_csv.join(locations),
         platemap()
     )
 
-    profile_input = bridge.metadata
-        .join(corrected_images)
-        .map { plate_id, locations_dir, index, imgs -> tuple(plate_id, imgs, locations_dir, index) }
+    prepared = DEEPPROFILER_PREPARE(
+        images.join(bridge.metadata).map { plate_id, imgs, _locations_dir, index -> tuple(plate_id, imgs, index) },
+        file(params.deepprofiler_config)
+    )
+
+    profile_input = prepared.compressed
+        .join(bridge.metadata)
+        .map { plate_id, compressed, locations_dir, index -> tuple(plate_id, compressed, locations_dir, index) }
 
     profiled = DEEPPROFILE(
         profile_input,

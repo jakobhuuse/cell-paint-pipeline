@@ -2,7 +2,7 @@ CellProfiler Pipeline: http://www.cellprofiler.org
 Version:5
 DateRevision:428
 GitHash:
-ModuleCount:17
+ModuleCount:7
 HasImagePlaneDetails:False
 
 Images:[module_num:1|svn_version:'Unknown'|variable_revision_number:2|show_window:False|notes:['']|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
@@ -42,11 +42,11 @@ NamesAndTypes:[module_num:3|svn_version:'Unknown'|variable_revision_number:8|sho
     Assign a name to:Images matching rules
     Select the image type:Grayscale image
     Name to assign these images:DNA
-    Match metadata:[{'OrigDNA': 'Well', 'OrigMito': 'Well', 'OrigAGP': 'Well', 'OrigRNA': 'Well', 'OrigER': 'Well', 'IllumDNA': 'Well', 'IllumMito': 'Well', 'IllumAGP': 'Well', 'IllumRNA': 'Well', 'IllumER': 'Well'}, {'OrigDNA': 'Site', 'OrigMito': 'Site', 'OrigAGP': 'Site', 'OrigRNA': 'Site', 'OrigER': 'Site', 'IllumDNA': 'Site', 'IllumMito': 'Site', 'IllumAGP': 'Site', 'IllumRNA': 'Site', 'IllumER': 'Site'}]
+    Match metadata:[{'OrigDNA': 'Well', 'OrigMito': 'Well', 'OrigAGP': 'Well', 'OrigRNA': 'Well', 'OrigER': 'Well'}, {'OrigDNA': 'Site', 'OrigMito': 'Site', 'OrigAGP': 'Site', 'OrigRNA': 'Site', 'OrigER': 'Site'}]
     Image set matching method:Metadata
     Set intensity range from:Image metadata
     Assignments count:5
-    Single images count:5
+    Single images count:0
     Maximum intensity:255.0
     Process as 3D?:No
     Relative pixel spacing in X:1.0
@@ -82,84 +82,14 @@ NamesAndTypes:[module_num:3|svn_version:'Unknown'|variable_revision_number:8|sho
     Select the image type:Grayscale image
     Set intensity range from:Image metadata
     Maximum intensity:255.0
-    Single image location:file:ILLUM_PLACEHOLDER/IllumDNA.npy
-    Name to assign this image:IllumDNA
-    Name to assign these objects:Nucleus
-    Select the image type:Illumination function
-    Set intensity range from:Image metadata
-    Maximum intensity:255.0
-    Single image location:file:ILLUM_PLACEHOLDER/IllumMito.npy
-    Name to assign this image:IllumMito
-    Name to assign these objects:Cytoplasm
-    Select the image type:Illumination function
-    Set intensity range from:Image metadata
-    Maximum intensity:255.0
-    Single image location:file:ILLUM_PLACEHOLDER/IllumAGP.npy
-    Name to assign this image:IllumAGP
-    Name to assign these objects:Speckle
-    Select the image type:Illumination function
-    Set intensity range from:Image metadata
-    Maximum intensity:255.0
-    Single image location:file:ILLUM_PLACEHOLDER/IllumRNA.npy
-    Name to assign this image:IllumRNA
-    Name to assign these objects:Object1
-    Select the image type:Illumination function
-    Set intensity range from:Image metadata
-    Maximum intensity:255.0
-    Single image location:file:ILLUM_PLACEHOLDER/IllumER.npy
-    Name to assign this image:IllumER
-    Name to assign these objects:Object2
-    Select the image type:Illumination function
-    Set intensity range from:Image metadata
-    Maximum intensity:255.0
 
 Groups:[module_num:4|svn_version:'Unknown'|variable_revision_number:2|show_window:False|notes:['']|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Do you want to group your images?:Yes
     grouping metadata count:1
     Metadata category:Plate
 
-CorrectIlluminationApply:[module_num:5|svn_version:'Unknown'|variable_revision_number:5|show_window:False|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+IdentifyPrimaryObjects:[module_num:5|svn_version:'Unknown'|variable_revision_number:15|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the input image:OrigDNA
-    Name the output image:CorrDNA
-    Select the illumination function:IllumDNA
-    Select how the illumination function is applied:Divide
-    Set output image values less than 0 equal to 0?:Yes
-    Set output image values greater than 1 equal to 1?:Yes
-
-CorrectIlluminationApply:[module_num:6|svn_version:'Unknown'|variable_revision_number:5|show_window:False|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the input image:OrigMito
-    Name the output image:CorrMito
-    Select the illumination function:IllumMito
-    Select how the illumination function is applied:Divide
-    Set output image values less than 0 equal to 0?:Yes
-    Set output image values greater than 1 equal to 1?:Yes
-
-CorrectIlluminationApply:[module_num:7|svn_version:'Unknown'|variable_revision_number:5|show_window:False|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the input image:OrigAGP
-    Name the output image:CorrAGP
-    Select the illumination function:IllumAGP
-    Select how the illumination function is applied:Divide
-    Set output image values less than 0 equal to 0?:Yes
-    Set output image values greater than 1 equal to 1?:Yes
-
-CorrectIlluminationApply:[module_num:8|svn_version:'Unknown'|variable_revision_number:5|show_window:False|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the input image:OrigRNA
-    Name the output image:CorrRNA
-    Select the illumination function:IllumRNA
-    Select how the illumination function is applied:Divide
-    Set output image values less than 0 equal to 0?:Yes
-    Set output image values greater than 1 equal to 1?:Yes
-
-CorrectIlluminationApply:[module_num:9|svn_version:'Unknown'|variable_revision_number:5|show_window:False|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the input image:OrigER
-    Name the output image:CorrER
-    Select the illumination function:IllumER
-    Select how the illumination function is applied:Divide
-    Set output image values less than 0 equal to 0?:Yes
-    Set output image values greater than 1 equal to 1?:Yes
-
-IdentifyPrimaryObjects:[module_num:10|svn_version:'Unknown'|variable_revision_number:15|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the input image:CorrDNA
     Name the primary objects to be identified:Nuclei
     Typical diameter of objects, in pixel units (Min,Max):10,40
     Discard objects outside the diameter range?:Yes
@@ -194,107 +124,7 @@ IdentifyPrimaryObjects:[module_num:10|svn_version:'Unknown'|variable_revision_nu
     # of deviations:2.0
     Thresholding method:Minimum Cross-Entropy
 
-SaveImages:[module_num:11|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the type of image to save:Image
-    Select the image to save:CorrDNA
-    Select method for constructing file names:From image filename
-    Select image name for file prefix:OrigDNA
-    Enter single file name:\g<Well>_s\g<Site>_w1
-    Number of digits:4
-    Append a suffix to the image file name?:No
-    Text to append to the image name:
-    Saved file format:tiff
-    Output file location:Default Output Folder sub-folder|images/
-    Image bit depth:16-bit integer
-    Overwrite existing files without warning?:Yes
-    When to save:Every cycle
-    Record the file and path information to the saved image?:No
-    Create subfolders in the output folder?:No
-    Base image folder:Elsewhere...|
-    How to save the series:T (Time)
-    Save with lossless compression?:Yes
-
-SaveImages:[module_num:12|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the type of image to save:Image
-    Select the image to save:CorrMito
-    Select method for constructing file names:From image filename
-    Select image name for file prefix:OrigMito
-    Enter single file name:\g<Well>_s\g<Site>_w2
-    Number of digits:4
-    Append a suffix to the image file name?:No
-    Text to append to the image name:
-    Saved file format:tiff
-    Output file location:Default Output Folder sub-folder|images/
-    Image bit depth:16-bit integer
-    Overwrite existing files without warning?:Yes
-    When to save:Every cycle
-    Record the file and path information to the saved image?:No
-    Create subfolders in the output folder?:No
-    Base image folder:Elsewhere...|
-    How to save the series:T (Time)
-    Save with lossless compression?:Yes
-
-SaveImages:[module_num:13|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the type of image to save:Image
-    Select the image to save:CorrAGP
-    Select method for constructing file names:From image filename
-    Select image name for file prefix:OrigAGP
-    Enter single file name:\g<Well>_s\g<Site>_w3
-    Number of digits:4
-    Append a suffix to the image file name?:No
-    Text to append to the image name:
-    Saved file format:tiff
-    Output file location:Default Output Folder sub-folder|images/
-    Image bit depth:16-bit integer
-    Overwrite existing files without warning?:Yes
-    When to save:Every cycle
-    Record the file and path information to the saved image?:No
-    Create subfolders in the output folder?:No
-    Base image folder:Elsewhere...|
-    How to save the series:T (Time)
-    Save with lossless compression?:Yes
-
-SaveImages:[module_num:14|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the type of image to save:Image
-    Select the image to save:CorrRNA
-    Select method for constructing file names:From image filename
-    Select image name for file prefix:OrigRNA
-    Enter single file name:\g<Well>_s\g<Site>_w4
-    Number of digits:4
-    Append a suffix to the image file name?:No
-    Text to append to the image name:
-    Saved file format:tiff
-    Output file location:Default Output Folder sub-folder|images/
-    Image bit depth:16-bit integer
-    Overwrite existing files without warning?:Yes
-    When to save:Every cycle
-    Record the file and path information to the saved image?:No
-    Create subfolders in the output folder?:No
-    Base image folder:Elsewhere...|
-    How to save the series:T (Time)
-    Save with lossless compression?:Yes
-
-SaveImages:[module_num:15|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the type of image to save:Image
-    Select the image to save:CorrER
-    Select method for constructing file names:From image filename
-    Select image name for file prefix:OrigER
-    Enter single file name:\g<Well>_s\g<Site>_w5
-    Number of digits:4
-    Append a suffix to the image file name?:No
-    Text to append to the image name:
-    Saved file format:tiff
-    Output file location:Default Output Folder sub-folder|images/
-    Image bit depth:16-bit integer
-    Overwrite existing files without warning?:Yes
-    When to save:Every cycle
-    Record the file and path information to the saved image?:No
-    Create subfolders in the output folder?:No
-    Base image folder:Elsewhere...|
-    How to save the series:T (Time)
-    Save with lossless compression?:Yes
-
-ExportToSpreadsheet:[module_num:16|svn_version:'Unknown'|variable_revision_number:13|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+ExportToSpreadsheet:[module_num:6|svn_version:'Unknown'|variable_revision_number:13|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the column delimiter:Comma (",")
     Add image metadata columns to your object data file?:No
     Add image file and folder names to your object data file?:No
@@ -318,7 +148,7 @@ ExportToSpreadsheet:[module_num:16|svn_version:'Unknown'|variable_revision_numbe
     File name:\g<Well>-\g<Site>-Nuclei.csv
     Use the object name for the file name?:No
 
-ExportToSpreadsheet:[module_num:17|svn_version:'Unknown'|variable_revision_number:13|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+ExportToSpreadsheet:[module_num:7|svn_version:'Unknown'|variable_revision_number:13|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the column delimiter:Comma (",")
     Add image metadata columns to your object data file?:No
     Add image file and folder names to your object data file?:No
