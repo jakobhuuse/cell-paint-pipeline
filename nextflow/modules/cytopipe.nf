@@ -1,25 +1,17 @@
-nextflow.enable.types = true
-
-include { BridgeInput; PlateMeta; PlateMeasurements; PlateFeatures; PlateParquet } from '../types.nf'
-
 process CYTOPIPE_BRIDGE {
-    tag { b.id }
+    tag { plate_id }
     label 'cytopipe'
-
+    
     input:
-    b: BridgeInput
-    platemap: Path
-
-    stage:
-    stageAs b.image_csv, 'measurement/Image.csv'
-    stageAs b.locations, 'measurement/locations/*'
+    tuple val(plate_id),
+          path('measurement/Image.csv'),
+          path(locations, stageAs: 'measurement/locations/*')
+    path platemap
 
     output:
-    record(
-        id: b.id,
-        locations: file('deepprofiler/locations/*', type: 'dir'),
-        index: file('deepprofiler/metadata/index.csv'),
-    )
+    tuple val(plate_id),
+        path('deepprofiler/locations/*', type: 'dir'),
+        path('deepprofiler/metadata/index.csv'), emit: metadata
 
     script:
     """
@@ -28,42 +20,36 @@ process CYTOPIPE_BRIDGE {
 }
 
 process CYTOPIPE_CELLPROFILER_PARQUET {
-    tag { m.id }
+    tag { plate_id }
     label 'cytopipe'
     label 'cytotable'
 
     input:
-    m: PlateMeasurements
-
-    stage:
-    stageAs m.measurements, 'measurement/*'
+    tuple val(plate_id), path(measurement, stageAs: 'measurement/*')
 
     output:
-    record(id: m.id, parquet: file("${m.id}.parquet"))
+    tuple val(plate_id), path("${plate_id}.parquet"), emit: cellprofiler_parquet
 
     script:
     """
-    cytopipe convert cellprofiler measurement ${m.id}.parquet
+    cytopipe convert cellprofiler measurement ${plate_id}.parquet
     """
 }
 
 process CYTOPIPE_DEEPPROFILER_PARQUET {
-    tag { f.id }
+    tag { plate_id }
     label 'cytopipe'
     label 'cytotable'
 
     input:
-    f: PlateFeatures
-
-    stage:
-    stageAs f.npz, 'features/*'
+    tuple val(plate_id), path(npz, stageAs: 'features/*')
 
     output:
-    record(id: f.id, parquet: file("${f.id}.parquet"))
+    tuple val(plate_id), path("${plate_id}.parquet"), emit: deepprofiler_parquet
 
     script:
     """
-    cytopipe convert deepprofiler features ${f.id}.parquet
+    cytopipe convert deepprofiler features ${plate_id}.parquet
     """
 }
 
@@ -71,16 +57,14 @@ process CYTOPIPE_CONCAT {
     label 'cytopipe'
 
     input:
-    parts: Bag<Path>
-
-    stage:
-    stageAs parts, 'parts/*'
+    path 'parts/*'
 
     output:
-    record(combined: file('combined.parquet'))
+    path 'combined.parquet', emit: combined
 
     script:
     """
     cytopipe convert concat parts combined.parquet
     """
 }
+

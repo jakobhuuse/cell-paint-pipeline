@@ -1,27 +1,23 @@
-nextflow.enable.types = true
-
-// The five core functions of pycytominer as processes.
+// The five core functions of pycytominer as processes. 
 // The processes should be used from top to bottom,
 // where DeepProfiler skips annotation and feature selection.
 
-include { PlateParquet } from '../types.nf'
-
 process PYCYTOMINER_AGGREGATE {
-    tag { pp.id }
+    tag { plate_id }
     label 'pycytominer'
 
     input:
-    pp: PlateParquet
-    features: String
+    tuple val(plate_id), path(profiles)
+    val features
 
     output:
-    record(id: pp.id, parquet: file("${pp.id}.aggregated.parquet"))
+    tuple val(plate_id), path("${plate_id}.aggregated.parquet"), emit: aggregated
 
     script:
     """
     pycytominer aggregate \\
-        --profiles "${pp.parquet}" \\
-        --output_file "${pp.id}.aggregated.parquet" \\
+        --profiles "${profiles}" \\
+        --output_file "${plate_id}.aggregated.parquet" \\
         --strata "${params.pycytominer_aggregate_strata}" \\
         --features "${features}" \\
         --output_type parquet
@@ -29,42 +25,42 @@ process PYCYTOMINER_AGGREGATE {
 }
 
 process PYCYTOMINER_ANNOTATE {
-    tag { pp.id }
+    tag { plate_id }
     label 'pycytominer'
 
     input:
-    pp: PlateParquet
-    platemap: Path
+    tuple val(plate_id), path(profiles)
+    path platemap
 
     output:
-    record(id: pp.id, parquet: file("${pp.id}.annotated.parquet"))
+    tuple val(plate_id), path("${plate_id}.annotated.parquet"), emit: annotated
 
     script:
     """
     pycytominer annotate \\
-        --profiles "${pp.parquet}" \\
-        --output_file "${pp.id}.annotated.parquet" \\
+        --profiles "${profiles}" \\
+        --output_file "${plate_id}.annotated.parquet" \\
         --platemap "${platemap}" \\
         --output_type parquet
     """
 }
 
 process PYCYTOMINER_NORMALIZE {
-    tag { pp.id }
+    tag { plate_id }
     label 'pycytominer'
 
     input:
-    pp: PlateParquet
-    features: String
+    tuple val(plate_id), path(profiles)
+    val features
 
     output:
-    record(id: pp.id, parquet: file("${pp.id}.normalized.parquet"))
+    tuple val(plate_id), path("${plate_id}.normalized.parquet"), emit: normalized
 
     script:
     """
     pycytominer normalize \\
-        --profiles "${pp.parquet}" \\
-        --output_file "${pp.id}.normalized.parquet" \\
+        --profiles "${profiles}" \\
+        --output_file "${plate_id}.normalized.parquet" \\
         --samples "${params.pycytominer_normalize_samples}" \\
         --features "${features}" \\
         --output_type parquet
@@ -75,11 +71,11 @@ process PYCYTOMINER_FEATURE_SELECT {
     label 'pycytominer'
 
     input:
-    profiles: Path
-    features: String
+    path profiles
+    val features
 
     output:
-    record(selected: file('feature_select.parquet'))
+    path 'feature_select.parquet', emit: selected
 
     script:
     """
@@ -96,11 +92,11 @@ process PYCYTOMINER_CONSENSUS {
     label 'pycytominer'
 
     input:
-    profiles: Path
-    features: String
+    path profiles
+    val features
 
     output:
-    record(consensus: file('consensus.parquet'))
+    path 'consensus.parquet', emit: consensus
 
     script:
     """
