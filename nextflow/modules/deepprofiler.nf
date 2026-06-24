@@ -37,7 +37,7 @@ process DEEPPROFILE {
 
 process DEEPPROFILER_PREPARE {
     tag { plate_id }
-    label 'deepprofiler_cpu'
+    label 'deepprofiler'
 
     input:
     tuple val(plate_id),

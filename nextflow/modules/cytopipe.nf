@@ -22,7 +22,6 @@ process CYTOPIPE_BRIDGE {
 process CYTOPIPE_CELLPROFILER_PARQUET {
     tag { plate_id }
     label 'cytopipe'
-    label 'cytotable'
 
     input:
     tuple val(plate_id), path(measurement, stageAs: 'measurement/*')
@@ -39,7 +38,6 @@ process CYTOPIPE_CELLPROFILER_PARQUET {
 process CYTOPIPE_DEEPPROFILER_PARQUET {
     tag { plate_id }
     label 'cytopipe'
-    label 'cytotable'
 
     input:
     tuple val(plate_id), path(npz, stageAs: 'features/*')
