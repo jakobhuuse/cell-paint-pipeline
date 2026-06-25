@@ -1,4 +1,4 @@
-include { CELLPROFILER_DEEPPROFILER } from '../modules/cellprofiler.nf'
+include { CELLPROFILER_NUCLEI } from '../modules/cellprofiler.nf'
 include { plateImages; platemap; deepprofilerFeatures; imageChunks } from '../utils.nf'
 include { CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_CONCAT } from '../modules/cytopipe.nf'
 include { DEEPPROFILER_PREPARE; DEEPPROFILE } from '../modules/deepprofiler.nf'
@@ -10,7 +10,7 @@ workflow {
 
     chunks = imageChunks(images, params.cellprofiler_chunk_size)
 
-    cellprofiler = CELLPROFILER_DEEPPROFILER(chunks, file(params.deepprofiler_cppipe))
+    cellprofiler = CELLPROFILER_NUCLEI(chunks, file(params.deepprofiler_cppipe))
 
     //Regroup data from different chunks
     image_csv = cellprofiler.image_csv

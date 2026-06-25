@@ -50,7 +50,7 @@ process CELLPROFILER_ANALYSIS {
 }
 
 // Identifies nuclei locations from raw images.
-process CELLPROFILER_DEEPPROFILER {
+process CELLPROFILER_NUCLEI {
     tag { "${plate_id} ${first}-${last}" }
     label 'cellprofiler'
 
