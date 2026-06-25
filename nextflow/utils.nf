@@ -10,23 +10,37 @@ def plateImages() {
         .filter { _id, tifs -> tifs } 
 }
 
-// Fan a per-plate (plate_id, images) channel out into image-set chunks:
-def imageChunks(ch, chunkSize) {
-    ch.flatMap { plate_id, imgs ->
-        int sites = imgs.size().intdiv(5)
-        int sz = chunkSize as int
-        (1..sites).step(sz).collect { first ->
-            int last = Math.min((first + sz) - 1, sites)
-            tuple(plate_id, first, last, imgs)
-        }
-    }
+// The image files a chunk's LoadData rows reference (every Image_FileName_Orig* cell), mapped back
+// to the staged File objects so the CellProfiler task stages only the images it needs.
+def imagesForChunk(csvFile, allImages) {
+    def lines = csvFile.readLines()
+    def header = lines[0].split(',')
+    def origCols = (0..<header.size()).findAll { id -> header[id].startsWith('Image_FileName_Orig') }
+    def byName = allImages.collectEntries { img -> [(img.name): img] }
+    lines.tail()
+        .collectMany { line -> def cells = line.split(','); origCols.collect { colId -> cells[colId] } }
+        .unique()
+        .collect { name -> byName[name] }
+        .findAll()
 }
 
-// As imageChunks, but carries the per-plate illum dir.
-def cellprofilerChunks(ch, chunkSize) {
-    imageChunks(ch.map { plate_id, _illum, imgs -> tuple(plate_id, imgs) }, chunkSize)
-        .combine(ch.map { plate_id, illum, _imgs -> tuple(plate_id, illum) }, by: 0)
-        .map { plate_id, first, last, imgs, illum -> tuple(plate_id, first, last, illum, imgs) }
+// Slice a per-plate LoadData CSV into chunks of `chunkSize` image-sets.
+def loadDataChunks(csvCh, imagesCh, chunkSize) {
+    csvCh
+        .flatMap { plate_id, csv ->
+            def lines = csv.readLines()
+            def header = lines[0]
+            lines.tail().collate(chunkSize as int).withIndex().collect { rows, i ->
+                ["${plate_id}.chunk${i + 1}.load_data.csv", ([header] + rows).join('\n') + '\n']
+            }
+        }
+        .collectFile { name, content -> [name, content] }
+        .map { f ->
+            def m = (f.name =~ /^(.+)\.chunk(\d+)\.load_data\.csv$/)[0]
+            tuple(m[1], m[2] as int, f)
+        }
+        .combine(imagesCh, by: 0)
+        .map { plate_id, idx, csv, imgs -> tuple(plate_id, idx, csv, imagesForChunk(csv, imgs)) }
 }
 
 // Platemap for the run.

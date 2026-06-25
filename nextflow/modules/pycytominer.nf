@@ -41,6 +41,7 @@ process PYCYTOMINER_ANNOTATE {
         --profiles "${profiles}" \\
         --output_file "${plate_id}.annotated.parquet" \\
         --platemap "${platemap}" \\
+        --join_on '${params.pycytominer_annotate_join_on}' \\
         --output_type parquet
     """
 }

@@ -1,3 +1,24 @@
+// Build a CellProfiler LoadData CSV from a plate's raw channel images. PathName columns are
+// emitted as the __IMAGES__/__ILLUM__ placeholders, which the CellProfiler processes sed to the
+// staged dirs at run time. with_illum adds Illum<channel> columns for the analysis pipeline.
+process CYTOPIPE_LOADDATA {
+    tag { with_illum ? "${plate_id} +illum" : plate_id }
+    label 'cytopipe'
+
+    input:
+    tuple val(plate_id), path(images, stageAs: 'images/*')
+    val with_illum
+
+    output:
+    tuple val(plate_id), path("${plate_id}.load_data.csv"), emit: csv
+
+    script:
+    def illum_flag = with_illum ? '--with-illum' : ''
+    """
+    cytopipe loaddata images ${plate_id}.load_data.csv --plate ${plate_id} ${illum_flag}
+    """
+}
+
 process CYTOPIPE_BRIDGE {
     tag { plate_id }
     label 'cytopipe'

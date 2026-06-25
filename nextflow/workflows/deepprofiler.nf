@@ -1,6 +1,6 @@
 include { CELLPROFILER_NUCLEI } from '../modules/cellprofiler.nf'
-include { plateImages; platemap; deepprofilerFeatures; imageChunks } from '../utils.nf'
-include { CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_CONCAT } from '../modules/cytopipe.nf'
+include { plateImages; platemap; deepprofilerFeatures; loadDataChunks } from '../utils.nf'
+include { CYTOPIPE_LOADDATA; CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_CONCAT } from '../modules/cytopipe.nf'
 include { DEEPPROFILER_PREPARE; DEEPPROFILE } from '../modules/deepprofiler.nf'
 include { PYCYTOMINER_AGGREGATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
@@ -8,9 +8,11 @@ workflow {
     main:
     images = plateImages()
 
-    chunks = imageChunks(images, params.cellprofiler_chunk_size)
+    loaddata = CYTOPIPE_LOADDATA(images, false)
 
-    cellprofiler = CELLPROFILER_NUCLEI(chunks, file(params.deepprofiler_cppipe))
+    chunks = loadDataChunks(loaddata.csv, images, params.cellprofiler_chunk_size)
+
+    cellprofiler = CELLPROFILER_NUCLEI(chunks, file(params.nuclei_cppipe))
 
     //Regroup data from different chunks
     image_csv = cellprofiler.image_csv
@@ -43,13 +45,12 @@ workflow {
 
     single_cell = CYTOPIPE_DEEPPROFILER_PARQUET(profiled.features)
 
+    //Pycytominer
     features = deepprofilerFeatures()
 
     aggregated = PYCYTOMINER_AGGREGATE(single_cell.deepprofiler_parquet, features)
     normalized = PYCYTOMINER_NORMALIZE(aggregated.aggregated, features)
-
     cohort = CYTOPIPE_CONCAT(normalized.normalized.map { _plate_id, profiles -> profiles }.collect())
-
     consensus = PYCYTOMINER_CONSENSUS(cohort.combined, features)
 
     publish:

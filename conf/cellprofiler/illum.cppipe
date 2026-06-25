@@ -2,93 +2,26 @@ CellProfiler Pipeline: http://www.cellprofiler.org
 Version:5
 DateRevision:428
 GitHash:
-ModuleCount:14
+ModuleCount:12
 HasImagePlaneDetails:False
 
-Images:[module_num:1|svn_version:'Unknown'|variable_revision_number:2|show_window:False|notes:['']|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    :
-    Filter images?:Custom
-    Select the rule criteria:and (extension does isimage) (file doesnot contain "thumb")
+LoadData:[module_num:1|svn_version:'Unknown'|variable_revision_number:6|show_window:False|notes:['Image sets, per-channel paths, and metadata come from the load_data.csv passed via --data-file. PathName columns are absolute (the orchestrator substitutes the staged image dir).']|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+    Input data file location:Default Input Folder|
+    Name of the file:load_data.csv
+    Load images based on this data?:Yes
+    Base image location:None|
+    Process just a range of rows?:No
+    Rows to process:1,100000
+    Group images by metadata?:No
+    Select metadata tags for grouping:
+    Rescale intensities?:Yes
 
-Metadata:[module_num:2|svn_version:'Unknown'|variable_revision_number:6|show_window:False|notes:['', '']|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Extract metadata?:Yes
-    Metadata data type:Text
-    Metadata types:{"ChannelNumber": "integer", "Date": "text", "FileLocation": "text", "Frame": "text", "Plate": "text", "Series": "text", "Site": "integer", "Well": "text"}
-    Extraction method count:2
-    Metadata extraction method:Extract from file/folder names
-    Metadata source:File name
-    Regular expression to extract from file name:^(?P<Experiment>[^_]+(?:-[^_]+)*)_(?P<Well>[A-P][0-9]{2})_s(?P<Site>[0-9]{1,2})_w(?P<ChannelNumber>[0-9])
-    Regular expression to extract from folder name:(?P<Date>[0-9]{4}_[0-9]{2}_[0-9]{2})$
-    Extract metadata from:All images
-    Select the filtering criteria:and (file doesnot contain "")
-    Metadata file location:Elsewhere...|
-    Match file and image metadata:[]
-    Use case insensitive matching?:No
-    Metadata file name:
-    Does cached metadata exist?:No
-    Metadata extraction method:Extract from file/folder names
-    Metadata source:Folder name
-    Regular expression to extract from file name:^(?P<Plate>.*)_(?P<Well>[A-P][0-9]{2})_s(?P<Site>[0-9]{1,2})_w(?P<ChannelNumber>[0-9])
-    Regular expression to extract from folder name:.*[/\\](?P<Date>\d{4}-\d{2}-\d{2})[/\\](?P<Plate>\d{5})[/\\]TimePoint_(?P<TimePoint>[0-9]+)
-    Extract metadata from:All images
-    Select the filtering criteria:and (file does contain "")
-    Metadata file location:Elsewhere...|
-    Match file and image metadata:[]
-    Use case insensitive matching?:No
-    Metadata file name:None
-    Does cached metadata exist?:No
-
-NamesAndTypes:[module_num:3|svn_version:'Unknown'|variable_revision_number:8|show_window:False|notes:['']|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Assign a name to:Images matching rules
-    Select the image type:Grayscale image
-    Name to assign these images:DNA
-    Match metadata:[{'OrigDNA': 'Well', 'OrigMito': 'Well', 'OrigAGP': 'Well', 'OrigRNA': 'Well', 'OrigER': 'Well'}, {'OrigDNA': 'Site', 'OrigMito': 'Site', 'OrigAGP': 'Site', 'OrigRNA': 'Site', 'OrigER': 'Site'}]
-    Image set matching method:Metadata
-    Set intensity range from:Image metadata
-    Assignments count:5
-    Single images count:0
-    Maximum intensity:255.0
-    Process as 3D?:No
-    Relative pixel spacing in X:1.0
-    Relative pixel spacing in Y:1.0
-    Relative pixel spacing in Z:1.0
-    Select the rule criteria:and (metadata does ChannelNumber "1")
-    Name to assign these images:OrigDNA
-    Name to assign these objects:Cell
-    Select the image type:Grayscale image
-    Set intensity range from:Image metadata
-    Maximum intensity:255.0
-    Select the rule criteria:and (metadata does ChannelNumber "2")
-    Name to assign these images:OrigMito
-    Name to assign these objects:Cell
-    Select the image type:Grayscale image
-    Set intensity range from:Image metadata
-    Maximum intensity:255.0
-    Select the rule criteria:and (metadata does ChannelNumber "3")
-    Name to assign these images:OrigAGP
-    Name to assign these objects:Cell
-    Select the image type:Grayscale image
-    Set intensity range from:Image metadata
-    Maximum intensity:255.0
-    Select the rule criteria:and (metadata does ChannelNumber "4")
-    Name to assign these images:OrigRNA
-    Name to assign these objects:Cell
-    Select the image type:Grayscale image
-    Set intensity range from:Image metadata
-    Maximum intensity:255.0
-    Select the rule criteria:and (metadata does ChannelNumber "5")
-    Name to assign these images:OrigER
-    Name to assign these objects:Cell
-    Select the image type:Grayscale image
-    Set intensity range from:Image metadata
-    Maximum intensity:255.0
-
-Groups:[module_num:4|svn_version:'Unknown'|variable_revision_number:2|show_window:False|notes:['']|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+Groups:[module_num:2|svn_version:'Unknown'|variable_revision_number:2|show_window:False|notes:['']|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Do you want to group your images?:Yes
     grouping metadata count:1
     Metadata category:Plate
 
-CorrectIlluminationCalculate:[module_num:5|svn_version:'Unknown'|variable_revision_number:2|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+CorrectIlluminationCalculate:[module_num:3|svn_version:'Unknown'|variable_revision_number:2|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the input image:OrigDNA
     Name the output image:IllumDNA
     Select how the illumination function is calculated:Regular
@@ -113,7 +46,7 @@ CorrectIlluminationCalculate:[module_num:5|svn_version:'Unknown'|variable_revisi
     Maximum number of iterations:40
     Residual value for convergence:0.001
 
-CorrectIlluminationCalculate:[module_num:6|svn_version:'Unknown'|variable_revision_number:2|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+CorrectIlluminationCalculate:[module_num:4|svn_version:'Unknown'|variable_revision_number:2|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the input image:OrigMito
     Name the output image:IllumMito
     Select how the illumination function is calculated:Regular
@@ -138,7 +71,7 @@ CorrectIlluminationCalculate:[module_num:6|svn_version:'Unknown'|variable_revisi
     Maximum number of iterations:40
     Residual value for convergence:0.001
 
-CorrectIlluminationCalculate:[module_num:7|svn_version:'Unknown'|variable_revision_number:2|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+CorrectIlluminationCalculate:[module_num:5|svn_version:'Unknown'|variable_revision_number:2|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the input image:OrigAGP
     Name the output image:IllumAGP
     Select how the illumination function is calculated:Regular
@@ -163,7 +96,7 @@ CorrectIlluminationCalculate:[module_num:7|svn_version:'Unknown'|variable_revisi
     Maximum number of iterations:40
     Residual value for convergence:0.001
 
-CorrectIlluminationCalculate:[module_num:8|svn_version:'Unknown'|variable_revision_number:2|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+CorrectIlluminationCalculate:[module_num:6|svn_version:'Unknown'|variable_revision_number:2|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the input image:OrigRNA
     Name the output image:IllumRNA
     Select how the illumination function is calculated:Regular
@@ -188,7 +121,7 @@ CorrectIlluminationCalculate:[module_num:8|svn_version:'Unknown'|variable_revisi
     Maximum number of iterations:40
     Residual value for convergence:0.001
 
-CorrectIlluminationCalculate:[module_num:9|svn_version:'Unknown'|variable_revision_number:2|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+CorrectIlluminationCalculate:[module_num:7|svn_version:'Unknown'|variable_revision_number:2|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the input image:OrigER
     Name the output image:IllumER
     Select how the illumination function is calculated:Regular
@@ -213,7 +146,7 @@ CorrectIlluminationCalculate:[module_num:9|svn_version:'Unknown'|variable_revisi
     Maximum number of iterations:40
     Residual value for convergence:0.001
 
-SaveImages:[module_num:10|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+SaveImages:[module_num:8|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the type of image to save:Image
     Select the image to save:IllumDNA
     Select method for constructing file names:Single name
@@ -223,7 +156,47 @@ SaveImages:[module_num:10|svn_version:'Unknown'|variable_revision_number:16|show
     Append a suffix to the image file name?:No
     Text to append to the image name:
     Saved file format:npy
-    Output file location:Default Output Folder|illum/\\g\g<Plate>
+    Output file location:Default Output Folder|
+    Image bit depth:8-bit integer
+    Overwrite existing files without warning?:Yes
+    When to save:Last cycle
+    Record the file and path information to the saved image?:No
+    Create subfolders in the output folder?:No
+    Base image folder:Elsewhere...|
+    How to save the series:T (Time)
+    Save with lossless compression?:Yes
+
+SaveImages:[module_num:9|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+    Select the type of image to save:Image
+    Select the image to save:IllumMito
+    Select method for constructing file names:Single name
+    Select image name for file prefix:None
+    Enter single file name:IllumMito
+    Number of digits:4
+    Append a suffix to the image file name?:No
+    Text to append to the image name:
+    Saved file format:npy
+    Output file location:Default Output Folder|
+    Image bit depth:8-bit integer
+    Overwrite existing files without warning?:Yes
+    When to save:Last cycle
+    Record the file and path information to the saved image?:No
+    Create subfolders in the output folder?:No
+    Base image folder:Elsewhere...|
+    How to save the series:T (Time)
+    Save with lossless compression?:Yes
+
+SaveImages:[module_num:10|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
+    Select the type of image to save:Image
+    Select the image to save:IllumAGP
+    Select method for constructing file names:Single name
+    Select image name for file prefix:None
+    Enter single file name:IllumAGP
+    Number of digits:4
+    Append a suffix to the image file name?:No
+    Text to append to the image name:
+    Saved file format:npy
+    Output file location:Default Output Folder|
     Image bit depth:8-bit integer
     Overwrite existing files without warning?:Yes
     When to save:Last cycle
@@ -235,15 +208,15 @@ SaveImages:[module_num:10|svn_version:'Unknown'|variable_revision_number:16|show
 
 SaveImages:[module_num:11|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the type of image to save:Image
-    Select the image to save:IllumMito
+    Select the image to save:IllumRNA
     Select method for constructing file names:Single name
     Select image name for file prefix:None
-    Enter single file name:IllumMito
+    Enter single file name:IllumRNA
     Number of digits:4
     Append a suffix to the image file name?:No
     Text to append to the image name:
     Saved file format:npy
-    Output file location:Default Output Folder|illum/\\g\g<Plate>
+    Output file location:Default Output Folder|
     Image bit depth:8-bit integer
     Overwrite existing files without warning?:Yes
     When to save:Last cycle
@@ -255,46 +228,6 @@ SaveImages:[module_num:11|svn_version:'Unknown'|variable_revision_number:16|show
 
 SaveImages:[module_num:12|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
     Select the type of image to save:Image
-    Select the image to save:IllumAGP
-    Select method for constructing file names:Single name
-    Select image name for file prefix:None
-    Enter single file name:IllumAGP
-    Number of digits:4
-    Append a suffix to the image file name?:No
-    Text to append to the image name:
-    Saved file format:npy
-    Output file location:Default Output Folder|illum/\\g\g<Plate>
-    Image bit depth:8-bit integer
-    Overwrite existing files without warning?:Yes
-    When to save:Last cycle
-    Record the file and path information to the saved image?:No
-    Create subfolders in the output folder?:No
-    Base image folder:Elsewhere...|
-    How to save the series:T (Time)
-    Save with lossless compression?:Yes
-
-SaveImages:[module_num:13|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the type of image to save:Image
-    Select the image to save:IllumRNA
-    Select method for constructing file names:Single name
-    Select image name for file prefix:None
-    Enter single file name:IllumRNA
-    Number of digits:4
-    Append a suffix to the image file name?:No
-    Text to append to the image name:
-    Saved file format:npy
-    Output file location:Default Output Folder|illum/\\g\g<Plate>
-    Image bit depth:8-bit integer
-    Overwrite existing files without warning?:Yes
-    When to save:Last cycle
-    Record the file and path information to the saved image?:No
-    Create subfolders in the output folder?:No
-    Base image folder:Elsewhere...|
-    How to save the series:T (Time)
-    Save with lossless compression?:Yes
-
-SaveImages:[module_num:14|svn_version:'Unknown'|variable_revision_number:16|show_window:True|notes:[]|batch_state:array([], dtype=uint8)|enabled:True|wants_pause:False]
-    Select the type of image to save:Image
     Select the image to save:IllumER
     Select method for constructing file names:Single name
     Select image name for file prefix:None
@@ -303,7 +236,7 @@ SaveImages:[module_num:14|svn_version:'Unknown'|variable_revision_number:16|show
     Append a suffix to the image file name?:No
     Text to append to the image name:
     Saved file format:npy
-    Output file location:Default Output Folder|illum/\\g\g<Plate>
+    Output file location:Default Output Folder|
     Image bit depth:8-bit integer
     Overwrite existing files without warning?:Yes
     When to save:Last cycle
