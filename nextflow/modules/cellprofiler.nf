@@ -1,6 +1,3 @@
-// CellProfiler runs are driven by a LoadData CSV (--data-file). Each process substitutes the
-// __IMAGES__ and __ILLUM__ PathName placeholders with the staged dirs before running.
-
 process CELLPROFILER_ILLUM {
     tag { plate_id }
     label 'cellprofiler'
@@ -25,15 +22,15 @@ process CELLPROFILER_ILLUM {
 }
 
 process CELLPROFILER_ANALYSIS {
-    tag { "${plate_id} chunk ${chunk_idx}" }
+    tag { "${plate_id} chunk ${chunk_id}" }
     label 'cellprofiler'
 
     input:
-    tuple val(plate_id), val(chunk_idx), path(load_data), path(images, stageAs: 'images/*'), path(illum)
+    tuple val(plate_id), val(chunk_id), path(load_data), path(images, stageAs: 'images/*'), path(illum)
     path cppipe
 
     output:
-    tuple val(plate_id), path("${plate_id}.${chunk_idx}.sqlite"), emit: measurement
+    tuple val(plate_id), path("${plate_id}.${chunk_id}.sqlite"), emit: measurement
 
     script:
     """
@@ -45,22 +42,21 @@ process CELLPROFILER_ANALYSIS {
         --data-file load_data.csv \\
         -o out
 
-    mv out/measurements.sqlite ${plate_id}.${chunk_idx}.sqlite
+    mv out/measurements.sqlite ${plate_id}.${chunk_id}.sqlite
     """
 }
 
-// Identifies nuclei locations from raw images (feeds DeepProfiler).
 process CELLPROFILER_NUCLEI {
-    tag { "${plate_id} chunk ${chunk_idx}" }
+    tag { "${plate_id} chunk ${chunk_id}" }
     label 'cellprofiler'
 
     input:
-    tuple val(plate_id), val(chunk_idx), path(load_data), path(images, stageAs: 'images/*')
+    tuple val(plate_id), val(chunk_id), path(load_data), path(images, stageAs: 'images/*')
     path cppipe
 
     output:
-    tuple val(plate_id), path('out/Image.csv'),              emit: image_csv
-    tuple val(plate_id), path('out/locations/*-Nuclei.csv'), emit: locations
+    tuple val(plate_id), path("${plate_id}.${chunk_id}.Image.csv"), emit: image_csv
+    tuple val(plate_id), path('out/locations/*-Nuclei.csv'),         emit: locations
 
     script:
     """
@@ -71,5 +67,8 @@ process CELLPROFILER_NUCLEI {
         -p ${cppipe} \\
         --data-file load_data.csv \\
         -o out
+
+    # Unique per-chunk name so the grouped tables don't collide when staged for the bridge.
+    mv out/Image.csv ${plate_id}.${chunk_id}.Image.csv
     """
 }

@@ -13,11 +13,8 @@ workflow {
     chunks = loadDataChunks(loaddata.csv, images, params.cellprofiler_chunk_size)
 
     cellprofiler = CELLPROFILER_NUCLEI(chunks, file(params.nuclei_cppipe))
-
-    //Regroup data from different chunks
-    image_csv = cellprofiler.image_csv
-        .collectFile(keepHeader: true, skip: 1) { plate_id, csv -> ["${plate_id}.Image.csv", csv] }
-        .map { f -> tuple(f.name.replaceFirst(/\.Image\.csv$/, ''), f) }
+    
+    image_csv = cellprofiler.image_csv.groupTuple()
 
     locations = cellprofiler.locations
         .groupTuple()
