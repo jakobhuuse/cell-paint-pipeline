@@ -28,7 +28,7 @@ workflow {
 
     // Pycytominer
     features = 'infer'
-    aggregated = PYCYTOMINER_AGGREGATE(single_cell.cellprofiler_parquet, features)
+    aggregated = PYCYTOMINER_AGGREGATE(single_cell.cellprofiler_parquet, features, params.pycytominer_aggregate_strata_cp)
     annotated  = PYCYTOMINER_ANNOTATE(aggregated.aggregated, platemap())
     normalized = PYCYTOMINER_NORMALIZE(annotated.annotated, features)
     cohort = CYTOPIPE_CONCAT(normalized.normalized.map { _plate_id, profiles -> profiles }.collect())

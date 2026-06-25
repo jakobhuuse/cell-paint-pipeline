@@ -9,6 +9,7 @@ process PYCYTOMINER_AGGREGATE {
     input:
     tuple val(plate_id), path(profiles)
     val features
+    val strata
 
     output:
     tuple val(plate_id), path("${plate_id}.aggregated.parquet"), emit: aggregated
@@ -18,7 +19,7 @@ process PYCYTOMINER_AGGREGATE {
     pycytominer aggregate \\
         --profiles "${profiles}" \\
         --output_file "${plate_id}.aggregated.parquet" \\
-        --strata "${params.pycytominer_aggregate_strata}" \\
+        --strata "${strata}" \\
         --features "${features}" \\
         --output_type parquet
     """

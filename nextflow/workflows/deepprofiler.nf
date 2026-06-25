@@ -48,7 +48,7 @@ workflow {
     //Pycytominer
     features = deepprofilerFeatures()
 
-    aggregated = PYCYTOMINER_AGGREGATE(single_cell.deepprofiler_parquet, features)
+    aggregated = PYCYTOMINER_AGGREGATE(single_cell.deepprofiler_parquet, features, params.pycytominer_aggregate_strata_dp)
     normalized = PYCYTOMINER_NORMALIZE(aggregated.aggregated, features)
     cohort = CYTOPIPE_CONCAT(normalized.normalized.map { _plate_id, profiles -> profiles }.collect())
     consensus = PYCYTOMINER_CONSENSUS(cohort.combined, features)
