@@ -84,7 +84,13 @@ write_files:
 
       # --- data volume + NFS export (only if the volume is attached; re-run after attaching it) ---
       if [ -b /dev/vdb ]; then
-        blkid /dev/vdb >/dev/null 2>&1 || mkfs.xfs /dev/vdb
+        # Format only if it isn't ALREADY xfs (so we never wipe a populated /data on re-run).
+        # wipefs clears a stray partition table/signature that would otherwise skip mkfs and
+        # then break `mount` (e.g. a Cinder volume created "from image" rather than empty).
+        if [ "$(blkid -o value -s TYPE /dev/vdb 2>/dev/null)" != "xfs" ]; then
+          wipefs -a /dev/vdb
+          mkfs.xfs -f /dev/vdb
+        fi
         install -d -m 0755 /data
         grep -q ' /data ' /etc/fstab || echo "/dev/vdb /data xfs defaults,_netdev 0 2" >> /etc/fstab
         mount -a
