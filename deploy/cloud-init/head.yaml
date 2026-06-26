@@ -1,41 +1,40 @@
 #cloud-config
 # Head node for the cell-painting-pipeline SLURM cluster.
-#  - runs slurmctld + munge, the Nextflow driver, and the NFS server
-#  - boot from an Ubuntu 24.04 cloud image with the 80 TB Cinder volume attached (expected /dev/vdb)
-# Render every __PLACEHOLDER__ before use (see deploy/README.md).
+#  - runs slurmctld + munge, the Nextflow driver, and the NFS server for the data volume
+#  - all setup is one re-runnable script: sudo /usr/local/sbin/cluster-setup.sh
+#  - boot from Ubuntu 24.04; attach the Cinder data volume (the script picks it up on the next run)
+# Render __PLACEHOLDERS__ with ./render.sh, then paste this file as the Horizon customization script.
 
 hostname: __HEAD_HOST__
 preserve_hostname: false
 
-package_update: true
-packages:
-  - openjdk-21-jre-headless
-  - munge
-  - slurmctld
-  - slurm-client
-  - nfs-kernel-server
-  - xfsprogs
-  - chrony
-  - software-properties-common
-  - tmux
-  - curl
-
 write_files:
-  # Shared munge secret (base64 of the 1024-byte key). MUST be byte-identical on every node.
-  # Deferred so the munge user (created by the package) exists before chown.
-  - path: /etc/munge/munge.key
-    encoding: b64
-    owner: munge:munge
-    permissions: '0400'
-    defer: true
-    content: __MUNGE_KEY_B64__
-
-  # Cluster-wide SLURM config — identical on head and every compute node.
-  # Keep __COMPUTE_NODES__ in sync with deploy/slurm/slurm.conf.template and compute.yaml.
-  - path: /etc/slurm/slurm.conf
-    permissions: '0644'
-    defer: true
+  - path: /usr/local/sbin/cluster-setup.sh
+    permissions: '0755'
     content: |
+      #!/bin/bash
+      # Idempotent head-node setup. Safe to re-run (e.g. after attaching the data volume).
+      set -euxo pipefail
+      export DEBIAN_FRONTEND=noninteractive
+      APT='apt-get -o DPkg::Lock::Timeout=300 -y'
+
+      # Stop package postinst from auto-starting daemons before we've written their config.
+      printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d; chmod +x /usr/sbin/policy-rc.d
+
+      # --- packages (core fatal; apptainer/nextflow best-effort) ---
+      $APT update
+      $APT install software-properties-common
+      add-apt-repository -y universe
+      $APT update
+      $APT install munge slurmctld slurm-client nfs-kernel-server xfsprogs chrony tmux curl openjdk-21-jre-headless
+      ( add-apt-repository -y ppa:apptainer/ppa && $APT update && $APT install apptainer ) \
+        || echo "WARNING: apptainer install failed; install it manually (see deploy/README.md)" >&2
+
+      rm -f /usr/sbin/policy-rc.d
+
+      # --- slurm.conf (must be identical on every node) ---
+      install -d -m 0755 /etc/slurm
+      cat > /etc/slurm/slurm.conf <<'SLURMCONF'
       ClusterName=cellpainting
       SlurmctldHost=__HEAD_HOST__
       AuthType=auth/munge
@@ -58,50 +57,57 @@ write_files:
       SlurmdLogFile=/var/log/slurm/slurmd.log
       NodeName=__COMPUTE_NODES__ CPUs=16 RealMemory=48000 State=UNKNOWN
       PartitionName=compute Nodes=ALL Default=YES MaxTime=INFINITE State=UP
+      SLURMCONF
 
-  - path: /etc/slurm/cgroup.conf
-    permissions: '0644'
-    defer: true
-    content: |
+      cat > /etc/slurm/cgroup.conf <<'CGROUPCONF'
       CgroupPlugin=cgroup/v2
       ConstrainCores=yes
       ConstrainRAMSpace=yes
+      CGROUPCONF
 
-  # NFS export of the shared volume to the tenant subnet (e.g. 10.0.0.0/24).
-  - path: /etc/exports
-    permissions: '0644'
-    defer: true
-    content: |
-      /data __TENANT_CIDR__(rw,sync,no_subtree_check)
+      # --- munge key (shared secret, decoded from embedded base64; -x off so it isn't logged) ---
+      install -d -o munge -g munge -m 0700 /etc/munge
+      set +x
+      echo '__MUNGE_KEY_B64__' | base64 -d > /etc/munge/munge.key
+      set -x
+      chown munge:munge /etc/munge/munge.key
+      chmod 0400 /etc/munge/munge.key
+
+      # --- name resolution without DNS: the head's own name -> its tenant IP ---
+      SELF_IP=$(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -1)
+      sed -i '/127.0.1.1/d' /etc/hosts
+      grep -q ' __HEAD_HOST__$' /etc/hosts || echo "$SELF_IP __HEAD_HOST__" >> /etc/hosts
+      # Compute-node entries are added after they boot (their IPs aren't known yet) — see deploy/README.md Step 4.
+
+      # --- slurm state/log dirs ---
+      install -d -o slurm -g slurm /var/spool/slurmctld /var/spool/slurmd /var/log/slurm
+
+      # --- data volume + NFS export (only if the volume is attached; re-run after attaching it) ---
+      if [ -b /dev/vdb ]; then
+        blkid /dev/vdb >/dev/null 2>&1 || mkfs.xfs /dev/vdb
+        install -d -m 0755 /data
+        grep -q ' /data ' /etc/fstab || echo "/dev/vdb /data xfs defaults,_netdev 0 2" >> /etc/fstab
+        mount -a
+        install -d -o ubuntu -g ubuntu /data/work /data/apptainer-cache /data/input /data/results
+        grep -q '^/data ' /etc/exports || echo "/data __TENANT_CIDR__(rw,sync,no_subtree_check)" >> /etc/exports
+        systemctl enable --now nfs-kernel-server
+        exportfs -ra
+      else
+        echo "WARNING: /dev/vdb not present — attach the data volume, then re-run this script." >&2
+      fi
+
+      # --- Nextflow (needs Java; manifest requires >=26.04.0) ---
+      if [ ! -x /usr/local/bin/nextflow ]; then
+        ( curl -s https://get.nextflow.io | bash && install -m 0755 nextflow /usr/local/bin/nextflow && rm -f nextflow ) \
+          || echo "WARNING: nextflow install failed; install it manually" >&2
+      fi
+
+      # --- start services only now that config + key exist ---
+      systemctl enable --now chrony
+      systemctl enable munge slurmctld
+      systemctl restart munge
+      systemctl restart slurmctld
+      echo "head-setup done: $(hostname)"
 
 runcmd:
-  # --- resolve the head's own name to its tenant IP (so slurmctld binds the routable address) ---
-  # IP is detected at boot from the instance's NIC, so no __HEAD_IP__ needed here. Compute-node
-  # entries are added later (their IPs aren't known until they boot) — see Step 4 in deploy/README.md.
-  - |
-    echo "$(hostname -I | awk '{print $1}') __HEAD_HOST__" >> /etc/hosts
-
-  # --- format (once) + mount the Cinder data volume; adjust /dev/vdb if your flavor differs ---
-  - if ! blkid /dev/vdb >/dev/null 2>&1; then mkfs.xfs /dev/vdb; fi
-  - mkdir -p /data
-  - grep -q " /data " /etc/fstab || echo "/dev/vdb /data xfs defaults,_netdev 0 2" >> /etc/fstab
-  - mount -a
-  - mkdir -p /data/work /data/apptainer-cache /data/input /data/results
-  - chown -R ubuntu:ubuntu /data
-
-  # --- slurm spool / log dirs ---
-  - mkdir -p /var/spool/slurmctld /var/spool/slurmd /var/log/slurm
-  - chown slurm:slurm /var/spool/slurmctld /var/log/slurm
-
-  # --- Apptainer (official PPA; if unavailable, install the .deb from github.com/apptainer/apptainer/releases) ---
-  - add-apt-repository -y ppa:apptainer/ppa
-  - apt-get update
-  - apt-get install -y apptainer
-
-  # --- Nextflow (needs Java; nextflow.config manifest requires >=26.04.0) ---
-  - curl -s https://get.nextflow.io | bash
-  - mv nextflow /usr/local/bin/nextflow && chmod +x /usr/local/bin/nextflow
-
-  # --- export NFS + start services ---
-  - exportfs -ra
-  - systemctl enable --now chrony munge nfs-kernel-server slurmctld
+  - [ bash, /usr/local/sbin/cluster-setup.sh ]

@@ -20,8 +20,8 @@ SSH ─► HEAD (slurmctld, nextflow, NFS server, /data on 80 TB Cinder vol)
 
 | Path | Purpose |
 |------|---------|
-| `cloud-init/head.yaml`        | Boot-config template for the head node |
-| `cloud-init/compute.yaml`     | Boot-config template for each compute node |
+| `cloud-init/head.yaml`        | Head-node boot config — installs everything via one re-runnable script |
+| `cloud-init/compute.yaml`     | Compute-node boot config — same re-runnable script pattern |
 | `cloud-init/render.sh`        | Fills the templates from `cluster.env` → paste-ready `*.local.yaml` (no API) |
 | `cloud-init/cluster.env.example` | The handful of values you set per cluster |
 | `slurm/slurm.conf.template`   | Reference SLURM config (also embedded in the cloud-init files) |
@@ -71,33 +71,43 @@ internal IP from Horizon → put it in `cluster.env` → `./render.sh` → launc
 - **Configuration → Customization Script**: paste `head.local.yaml`.
 
 After it boots: note its **internal IP** (Instances list) → set `HEAD_IP` in `cluster.env`. Then
-*Instances → head → Attach Volume* → attach your volume (appears as `/dev/vdb`; the head formats it
-xfs and NFS-exports `/data`). SSH in to confirm:
+*Instances → head → Attach Volume* → attach your volume (it appears as `/dev/vdb`).
+
+The boot script runs *before* the volume is attached, so `/data` + NFS aren't set up on the first
+pass. Attach the volume, then **re-run the (idempotent) setup script** to pick it up:
 
 ```bash
-ssh ubuntu@<head-ip> 'cloud-init status --wait && findmnt /data && sinfo'
+ssh ubuntu@<head-ip>
+cloud-init status --wait                 # first-boot script finished (slurmctld up)
+sudo /usr/local/sbin/cluster-setup.sh    # now sees /dev/vdb → formats, mounts, exports /data
+findmnt /data && sinfo
 ```
+
+`cluster-setup.sh` is safe to re-run any time — it's how you recover a node that came up wrong
+(it rewrites the configs/munge key and restarts the daemons) without relaunching it.
 
 ## Step 3 — Horizon: launch the compute nodes
 
-`./render.sh` again (now that `HEAD_IP` is set) and launch N instances named `compute1…computeN`
-(matching `COMPUTE_NODES`), same image/SG/keypair, pasting `compute.local.yaml` as the
-customization script. Each mounts `<head-ip>:/data` and registers with the controller.
+`./render.sh` again (now that `HEAD_IP` is set) and launch the compute instances named
+`compute-1 … compute-10` (matching `COMPUTE_NODES=compute-[1-10]`), same image/SG/keypair, pasting
+`compute.local.yaml` as the customization script. Each mounts `<head-ip>:/data` and registers with
+the controller.
 
 ## Step 4 — Register the compute nodes on the head
 
 Compute IPs aren't known until they boot, so add them to the head's `/etc/hosts` now (render.sh
-prints this exact line from your `COMPUTE_HOSTS`):
+prints this exact line from your `COMPUTE_HOSTS`), then **restart** slurmctld so it resolves the new
+addresses (a plain `reconfigure` does *not* re-resolve node addresses):
 
 ```bash
 ssh ubuntu@<head-ip>
-printf '10.0.0.11 compute1\n10.0.0.12 compute2\n' | sudo tee -a /etc/hosts
-sudo scontrol reconfigure
+printf '10.0.0.11 compute-1\n10.0.0.12 compute-2\n...\n10.0.0.20 compute-10\n' | sudo tee -a /etc/hosts
+sudo systemctl restart slurmctld
 sinfo                 # nodes should show idle (not down/drain)
 srun -N1 hostname     # smoke-test job placement
 ```
 
-If a node is `down`/`drain`: `scontrol update nodename=computeX state=resume` after fixing the
+If a node is `down`/`drain`: `sudo scontrol update nodename=compute-1 state=resume` after fixing the
 cause (usually munge key mismatch or clock skew — see Troubleshooting).
 
 ## Step 5 — Get the code and warm the image cache
@@ -170,8 +180,19 @@ the **DeepProfiler-on-CPU timing number** to extrapolate before committing hardw
 
 ## Troubleshooting
 
-- **Nodes `down`/`drain`, "Munge decode failed"** — munge keys differ or clocks drift. Confirm the
-  same `__MUNGE_KEY_B64__` on all nodes; `chrony` is installed to keep time synced.
+- **First move for any node that came up wrong:** SSH in and `sudo /usr/local/sbin/cluster-setup.sh`.
+  It re-installs packages, rewrites `slurm.conf`/`cgroup.conf`/munge key, fixes `/etc/hosts`, and
+  restarts the daemons — idempotent, no relaunch needed. Then `scontrol ping` / `sinfo` from the head.
+- **`slurmd`: "DNS SRV lookup failed" / "failed to load configs"** — `/etc/slurm/slurm.conf` is
+  missing, so slurmd fell back to *configless* mode (there's no SRV record). Re-run the setup script.
+- **`slurmctld`: `getaddrinfo() failed` / `address family '0' not supported`** — a node name didn't
+  resolve when the daemon started, leaving an empty address slot. Ensure `head` and every `computeN`
+  are in `/etc/hosts` (DNS isn't relied on), then **restart** the daemon (not `reconfigure` — node
+  addresses are resolved only at start): `sudo systemctl restart slurmctld` (head) / `slurmd` (compute).
+- **`scontrol reconfigure` → "Socket timed out"** — the controller isn't answering; use
+  `sudo systemctl restart slurmctld` instead and check `scontrol ping`.
+- **Nodes `down`/`drain`, "Munge decode failed"** — munge keys differ or clocks drift. Re-run the
+  setup script on the affected node so it gets the same key; `chrony` keeps clocks synced.
 - **`srun`/jobs hang `PD` (pending)** — `scontrol show node computeX`; check `RealMemory`/`CPUs` in
   `slurm.conf` don't exceed the flavor (over-spec drains the node).
 - **NFS permission errors** — all nodes use the default `ubuntu` user (uid 1000), so writes line up;

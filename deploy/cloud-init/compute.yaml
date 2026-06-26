@@ -1,34 +1,37 @@
 #cloud-config
 # Compute node for the cell-painting-pipeline SLURM cluster.
-#  - runs slurmd + munge, mounts the head's /data over NFS, runs the pipeline containers (Apptainer)
-#  - NAME the instance compute1, compute2, ... so its hostname matches NodeName in slurm.conf
-#    (OpenStack sets the hostname from the instance name; no per-node editing needed below).
-# Render every __PLACEHOLDER__ before use (see deploy/README.md). __MUNGE_KEY_B64__,
-# the slurm.conf body, and __HEAD_*__ are the SAME values used in head.yaml.
-
-package_update: true
-packages:
-  - munge
-  - slurmd
-  - slurm-client
-  - nfs-common
-  - chrony
-  - software-properties-common
+#  - all setup is one re-runnable script: sudo /usr/local/sbin/cluster-setup.sh
+#  - NAME the instances compute-1 ... compute-10 so each hostname matches NodeName in slurm.conf.
+# Render __PLACEHOLDERS__ with ./render.sh, then paste this file as the Horizon customization script.
+# Do NOT set hostname here — it comes from the instance name (compute-1, compute-2, ...).
 
 write_files:
-  # Shared munge secret — byte-identical to the head's key. Deferred until the munge user exists.
-  - path: /etc/munge/munge.key
-    encoding: b64
-    owner: munge:munge
-    permissions: '0400'
-    defer: true
-    content: __MUNGE_KEY_B64__
-
-  # Identical to /etc/slurm/slurm.conf on the head node.
-  - path: /etc/slurm/slurm.conf
-    permissions: '0644'
-    defer: true
+  - path: /usr/local/sbin/cluster-setup.sh
+    permissions: '0755'
     content: |
+      #!/bin/bash
+      # Idempotent compute-node setup. Safe to re-run after fixing anything.
+      set -euxo pipefail
+      export DEBIAN_FRONTEND=noninteractive
+      APT='apt-get -o DPkg::Lock::Timeout=300 -y'
+
+      # Stop package postinst from auto-starting daemons before we've written their config.
+      printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d; chmod +x /usr/sbin/policy-rc.d
+
+      # --- packages (core is fatal; apptainer is best-effort so a bad PPA can't block the cluster) ---
+      $APT update
+      $APT install software-properties-common
+      add-apt-repository -y universe
+      $APT update
+      $APT install munge slurmd slurm-client nfs-common chrony
+      ( add-apt-repository -y ppa:apptainer/ppa && $APT update && $APT install apptainer ) \
+        || echo "WARNING: apptainer install failed; install it manually (see deploy/README.md)" >&2
+
+      rm -f /usr/sbin/policy-rc.d
+
+      # --- slurm.conf (must be identical on every node) ---
+      install -d -m 0755 /etc/slurm
+      cat > /etc/slurm/slurm.conf <<'SLURMCONF'
       ClusterName=cellpainting
       SlurmctldHost=__HEAD_HOST__
       AuthType=auth/munge
@@ -51,30 +54,39 @@ write_files:
       SlurmdLogFile=/var/log/slurm/slurmd.log
       NodeName=__COMPUTE_NODES__ CPUs=16 RealMemory=48000 State=UNKNOWN
       PartitionName=compute Nodes=ALL Default=YES MaxTime=INFINITE State=UP
+      SLURMCONF
 
-  - path: /etc/slurm/cgroup.conf
-    permissions: '0644'
-    defer: true
-    content: |
+      cat > /etc/slurm/cgroup.conf <<'CGROUPCONF'
       CgroupPlugin=cgroup/v2
       ConstrainCores=yes
       ConstrainRAMSpace=yes
+      CGROUPCONF
+
+      # --- munge key (shared secret, decoded from embedded base64; -x off so it isn't logged) ---
+      install -d -o munge -g munge -m 0700 /etc/munge
+      set +x
+      echo '__MUNGE_KEY_B64__' | base64 -d > /etc/munge/munge.key
+      set -x
+      chown munge:munge /etc/munge/munge.key
+      chmod 0400 /etc/munge/munge.key
+
+      # --- name resolution without DNS: the controller + this node's own name ---
+      SELF_IP=$(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -1)
+      grep -q ' __HEAD_HOST__$' /etc/hosts || echo "__HEAD_IP__ __HEAD_HOST__" >> /etc/hosts
+      grep -q " $(hostname)\$" /etc/hosts || echo "$SELF_IP $(hostname)" >> /etc/hosts
+
+      # --- dirs + shared /data over NFS (nofail so a not-yet-ready head can't block boot) ---
+      install -d -o slurm -g slurm /var/spool/slurmd /var/log/slurm
+      install -d -m 0755 /data
+      grep -q ' /data ' /etc/fstab || echo "__HEAD_IP__:/data /data nfs rw,_netdev,hard,nofail 0 0" >> /etc/fstab
+      mount -a || echo "WARNING: /data NFS mount failed (head up yet?); retry: sudo mount -a" >&2
+
+      # --- start services only now that config + key exist ---
+      systemctl enable --now chrony
+      systemctl enable munge slurmd
+      systemctl restart munge
+      systemctl restart slurmd
+      echo "compute-setup done: $(hostname)"
 
 runcmd:
-  # --- resolve the controller, then mount its /data over NFS ---
-  - echo "__HEAD_IP__ __HEAD_HOST__" >> /etc/hosts
-  - mkdir -p /data
-  - grep -q " /data " /etc/fstab || echo "__HEAD_IP__:/data /data nfs rw,_netdev,hard,nofail 0 0" >> /etc/fstab
-  - mount -a
-
-  # --- slurm spool / log dirs ---
-  - mkdir -p /var/spool/slurmd /var/log/slurm
-  - chown slurm:slurm /var/log/slurm
-
-  # --- Apptainer (official PPA; .deb fallback as in head.yaml) ---
-  - add-apt-repository -y ppa:apptainer/ppa
-  - apt-get update
-  - apt-get install -y apptainer
-
-  # --- start services (slurmd registers with the controller named in slurm.conf) ---
-  - systemctl enable --now chrony munge slurmd
+  - [ bash, /usr/local/sbin/cluster-setup.sh ]

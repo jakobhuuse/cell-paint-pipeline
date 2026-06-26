@@ -45,6 +45,6 @@ echo "Paste head.local.yaml as the head node's customization script, and compute
 echo "for each compute node, in the Horizon launch wizard."
 if [ -n "${COMPUTE_HOSTS:-}" ]; then
   echo
-  echo "After the compute nodes boot, run this ON THE HEAD to register them (Step 7):"
-  echo "  printf '$(printf '%s' "${COMPUTE_HOSTS//;/\\n}")\\n' | sudo tee -a /etc/hosts && sudo scontrol reconfigure"
+  echo "After the compute nodes boot, run this ON THE HEAD to register them (Step 4):"
+  echo "  printf '$(printf '%s' "${COMPUTE_HOSTS//;/\\n}")\\n' | sudo tee -a /etc/hosts && sudo systemctl restart slurmctld"
 fi
