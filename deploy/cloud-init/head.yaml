@@ -82,7 +82,9 @@ write_files:
       # --- slurm state/log dirs ---
       install -d -o slurm -g slurm /var/spool/slurmctld /var/spool/slurmd /var/log/slurm
 
-      # --- data volume + NFS export (only if the volume is attached; re-run after attaching it) ---
+      # --- data volume + NFS export. The /data mountpoint ALWAYS exists; we only format/mount/
+      #     export when the volume is attached (re-run this script after attaching it in Horizon). ---
+      install -d -m 0755 /data
       if [ -b /dev/vdb ]; then
         # Format only if it isn't ALREADY xfs (so we never wipe a populated /data on re-run).
         # wipefs clears a stray partition table/signature that would otherwise skip mkfs and
@@ -91,7 +93,6 @@ write_files:
           wipefs -a /dev/vdb
           mkfs.xfs -f /dev/vdb
         fi
-        install -d -m 0755 /data
         grep -q ' /data ' /etc/fstab || echo "/dev/vdb /data xfs defaults,_netdev 0 2" >> /etc/fstab
         mount -a
         chown ubuntu:ubuntu /data        # mountpoint is root-owned after mkfs; let ubuntu write under it
