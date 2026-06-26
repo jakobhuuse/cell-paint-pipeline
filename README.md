@@ -42,14 +42,18 @@ raw images
 
 ## Run the pipeline
 
+The CellProfiler and DeepProfiler branches are independent workflows — run whichever you need.
+
 ```bash
 # Local (Docker)
-nextflow run workflow/main.nf -profile standard -params-file conf/params.yaml
+nextflow run nextflow/workflows/deepprofiler.nf -profile standard
+nextflow run nextflow/workflows/cellprofiler.nf -profile standard
 
-# HPC (SLURM + Apptainer)
-sbatch deploy/slurm/nextflow.slurm
+# Cluster (SLURM + Apptainer) — see deploy/README.md
+nextflow run nextflow/workflows/deepprofiler.nf -profile slurm \
+    --input_dir /data/input --outdir /data/results
 ```
 
 See [conf/README.md](conf/README.md) for the inputs you must supply (CellProfiler `.cppipe`,
-DeepProfiler config/checkpoint, platemap) and [deploy/README.md](deploy/README.md) for HPC
-setup.
+DeepProfiler config/checkpoint, platemap) and [deploy/README.md](deploy/README.md) for OpenStack /
+SLURM setup.

@@ -1,0 +1,80 @@
+#cloud-config
+# Compute node for the cell-painting-pipeline SLURM cluster.
+#  - runs slurmd + munge, mounts the head's /data over NFS, runs the pipeline containers (Apptainer)
+#  - NAME the instance compute1, compute2, ... so its hostname matches NodeName in slurm.conf
+#    (OpenStack sets the hostname from the instance name; no per-node editing needed below).
+# Render every __PLACEHOLDER__ before use (see deploy/README.md). __MUNGE_KEY_B64__,
+# the slurm.conf body, and __HEAD_*__ are the SAME values used in head.yaml.
+
+package_update: true
+packages:
+  - munge
+  - slurmd
+  - slurm-client
+  - nfs-common
+  - chrony
+  - software-properties-common
+
+write_files:
+  # Shared munge secret — byte-identical to the head's key. Deferred until the munge user exists.
+  - path: /etc/munge/munge.key
+    encoding: b64
+    owner: munge:munge
+    permissions: '0400'
+    defer: true
+    content: __MUNGE_KEY_B64__
+
+  # Identical to /etc/slurm/slurm.conf on the head node.
+  - path: /etc/slurm/slurm.conf
+    permissions: '0644'
+    defer: true
+    content: |
+      ClusterName=cellpainting
+      SlurmctldHost=__HEAD_HOST__
+      AuthType=auth/munge
+      SlurmUser=slurm
+      SlurmctldPort=6817
+      SlurmdPort=6818
+      ReturnToService=2
+      StateSaveLocation=/var/spool/slurmctld
+      SlurmdSpoolDir=/var/spool/slurmd
+      SlurmctldPidFile=/run/slurmctld.pid
+      SlurmdPidFile=/run/slurmd.pid
+      SchedulerType=sched/backfill
+      SelectType=select/cons_tres
+      SelectTypeParameters=CR_CPU_Memory
+      ProctrackType=proctrack/cgroup
+      TaskPlugin=task/cgroup
+      SlurmctldTimeout=120
+      SlurmdTimeout=300
+      SlurmctldLogFile=/var/log/slurm/slurmctld.log
+      SlurmdLogFile=/var/log/slurm/slurmd.log
+      NodeName=__COMPUTE_NODES__ CPUs=16 RealMemory=48000 State=UNKNOWN
+      PartitionName=compute Nodes=ALL Default=YES MaxTime=INFINITE State=UP
+
+  - path: /etc/slurm/cgroup.conf
+    permissions: '0644'
+    defer: true
+    content: |
+      CgroupPlugin=cgroup/v2
+      ConstrainCores=yes
+      ConstrainRAMSpace=yes
+
+runcmd:
+  # --- resolve the controller, then mount its /data over NFS ---
+  - echo "__HEAD_IP__ __HEAD_HOST__" >> /etc/hosts
+  - mkdir -p /data
+  - grep -q " /data " /etc/fstab || echo "__HEAD_IP__:/data /data nfs rw,_netdev,hard,nofail 0 0" >> /etc/fstab
+  - mount -a
+
+  # --- slurm spool / log dirs ---
+  - mkdir -p /var/spool/slurmd /var/log/slurm
+  - chown slurm:slurm /var/log/slurm
+
+  # --- Apptainer (official PPA; .deb fallback as in head.yaml) ---
+  - add-apt-repository -y ppa:apptainer/ppa
+  - apt-get update
+  - apt-get install -y apptainer
+
+  # --- start services (slurmd registers with the controller named in slurm.conf) ---
+  - systemctl enable --now chrony munge slurmd

@@ -1,0 +1,107 @@
+#cloud-config
+# Head node for the cell-painting-pipeline SLURM cluster.
+#  - runs slurmctld + munge, the Nextflow driver, and the NFS server
+#  - boot from an Ubuntu 24.04 cloud image with the 80 TB Cinder volume attached (expected /dev/vdb)
+# Render every __PLACEHOLDER__ before use (see deploy/README.md).
+
+hostname: __HEAD_HOST__
+preserve_hostname: false
+
+package_update: true
+packages:
+  - openjdk-21-jre-headless
+  - munge
+  - slurmctld
+  - slurm-client
+  - nfs-kernel-server
+  - xfsprogs
+  - chrony
+  - software-properties-common
+  - tmux
+  - curl
+
+write_files:
+  # Shared munge secret (base64 of the 1024-byte key). MUST be byte-identical on every node.
+  # Deferred so the munge user (created by the package) exists before chown.
+  - path: /etc/munge/munge.key
+    encoding: b64
+    owner: munge:munge
+    permissions: '0400'
+    defer: true
+    content: __MUNGE_KEY_B64__
+
+  # Cluster-wide SLURM config — identical on head and every compute node.
+  # Keep __COMPUTE_NODES__ in sync with deploy/slurm/slurm.conf.template and compute.yaml.
+  - path: /etc/slurm/slurm.conf
+    permissions: '0644'
+    defer: true
+    content: |
+      ClusterName=cellpainting
+      SlurmctldHost=__HEAD_HOST__
+      AuthType=auth/munge
+      SlurmUser=slurm
+      SlurmctldPort=6817
+      SlurmdPort=6818
+      ReturnToService=2
+      StateSaveLocation=/var/spool/slurmctld
+      SlurmdSpoolDir=/var/spool/slurmd
+      SlurmctldPidFile=/run/slurmctld.pid
+      SlurmdPidFile=/run/slurmd.pid
+      SchedulerType=sched/backfill
+      SelectType=select/cons_tres
+      SelectTypeParameters=CR_CPU_Memory
+      ProctrackType=proctrack/cgroup
+      TaskPlugin=task/cgroup
+      SlurmctldTimeout=120
+      SlurmdTimeout=300
+      SlurmctldLogFile=/var/log/slurm/slurmctld.log
+      SlurmdLogFile=/var/log/slurm/slurmd.log
+      NodeName=__COMPUTE_NODES__ CPUs=16 RealMemory=48000 State=UNKNOWN
+      PartitionName=compute Nodes=ALL Default=YES MaxTime=INFINITE State=UP
+
+  - path: /etc/slurm/cgroup.conf
+    permissions: '0644'
+    defer: true
+    content: |
+      CgroupPlugin=cgroup/v2
+      ConstrainCores=yes
+      ConstrainRAMSpace=yes
+
+  # NFS export of the shared volume to the tenant subnet (e.g. 10.0.0.0/24).
+  - path: /etc/exports
+    permissions: '0644'
+    defer: true
+    content: |
+      /data __TENANT_CIDR__(rw,sync,no_subtree_check)
+
+runcmd:
+  # --- resolve the head's own name to its tenant IP (so slurmctld binds the routable address) ---
+  # IP is detected at boot from the instance's NIC, so no __HEAD_IP__ needed here. Compute-node
+  # entries are added later (their IPs aren't known until they boot) — see Step 4 in deploy/README.md.
+  - |
+    echo "$(hostname -I | awk '{print $1}') __HEAD_HOST__" >> /etc/hosts
+
+  # --- format (once) + mount the Cinder data volume; adjust /dev/vdb if your flavor differs ---
+  - if ! blkid /dev/vdb >/dev/null 2>&1; then mkfs.xfs /dev/vdb; fi
+  - mkdir -p /data
+  - grep -q " /data " /etc/fstab || echo "/dev/vdb /data xfs defaults,_netdev 0 2" >> /etc/fstab
+  - mount -a
+  - mkdir -p /data/work /data/apptainer-cache /data/input /data/results
+  - chown -R ubuntu:ubuntu /data
+
+  # --- slurm spool / log dirs ---
+  - mkdir -p /var/spool/slurmctld /var/spool/slurmd /var/log/slurm
+  - chown slurm:slurm /var/spool/slurmctld /var/log/slurm
+
+  # --- Apptainer (official PPA; if unavailable, install the .deb from github.com/apptainer/apptainer/releases) ---
+  - add-apt-repository -y ppa:apptainer/ppa
+  - apt-get update
+  - apt-get install -y apptainer
+
+  # --- Nextflow (needs Java; nextflow.config manifest requires >=26.04.0) ---
+  - curl -s https://get.nextflow.io | bash
+  - mv nextflow /usr/local/bin/nextflow && chmod +x /usr/local/bin/nextflow
+
+  # --- export NFS + start services ---
+  - exportfs -ra
+  - systemctl enable --now chrony munge nfs-kernel-server slurmctld
