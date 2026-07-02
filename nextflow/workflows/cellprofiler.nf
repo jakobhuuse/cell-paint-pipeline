@@ -1,11 +1,14 @@
-include { CELLPROFILER_ILLUM; CELLPROFILER_ANALYSIS } from '../modules/cellprofiler.nf'
+include { CELLPROFILER_QC; CELLPROFILER_ILLUM; CELLPROFILER_ANALYSIS } from '../modules/cellprofiler.nf'
 include { plateImages; loadDataChunks; platemap } from '../utils.nf'
-include { CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_BASE; CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_ILLUM; CYTOPIPE_CELLPROFILER_PARQUET; CYTOPIPE_CONCAT } from '../modules/cytopipe.nf'
+include { CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_BASE; CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_ILLUM; CYTOPIPE_CELLPROFILER_PARQUET; CYTOPIPE_CONCAT; CYTOPIPE_REPORT_CELLPROFILER } from '../modules/cytopipe.nf'
 include { PYCYTOMINER_AGGREGATE; PYCYTOMINER_ANNOTATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_FEATURE_SELECT; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
 workflow {
     main:
     images = plateImages()
+
+    // Diagnostic QC on the raw images
+    qc = CELLPROFILER_QC(images, file(params.qc_cppipe))
 
     // Illumination is calculated across the whole plate from a base (no-illum) LoadData CSV.
     base_csv = CYTOPIPE_LOADDATA_BASE(images, false)
@@ -35,16 +38,27 @@ workflow {
     selected  = PYCYTOMINER_FEATURE_SELECT(cohort.combined, features)
     consensus = PYCYTOMINER_CONSENSUS(selected.selected, features)
 
+    report = CYTOPIPE_REPORT_CELLPROFILER(
+        normalized.normalized.map { _plate_id, profiles -> profiles }.collect(),
+        selected.selected,
+        single_cell.cellprofiler_parquet.map { _plate_id, sc -> sc }.collect(),
+        consensus.consensus
+    )
+
     publish:
+    qc_reports          = qc.qc
     raw_profiles        = single_cell.cellprofiler_parquet
     normalized_profiles = normalized.normalized
     selected_profiles   = selected.selected
     consensus_profiles  = consensus.consensus
+    report_figures      = report.report
 }
 
 output {
+    qc_reports          { path 'cellprofiler/qc' }
     raw_profiles        { path 'cellprofiler/raw' }
     normalized_profiles { path 'cellprofiler/normalized' }
-    selected_profiles   { path 'cellprofiler/selected' }
+    selected_profiles   { path 'cellprofiler' }
     consensus_profiles  { path 'cellprofiler' }
+    report_figures      { path 'cellprofiler' }
 }

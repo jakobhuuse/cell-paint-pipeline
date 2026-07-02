@@ -1,6 +1,6 @@
 include { CELLPROFILER_NUCLEI } from '../modules/cellprofiler.nf'
 include { plateImages; platemap; deepprofilerFeatures; loadDataChunks } from '../utils.nf'
-include { CYTOPIPE_LOADDATA; CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_CONCAT; CYTOPIPE_REPORT } from '../modules/cytopipe.nf'
+include { CYTOPIPE_LOADDATA; CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_CONCAT; CYTOPIPE_REPORT_DEEPPROFILER } from '../modules/cytopipe.nf'
 include { DEEPPROFILER_PREPARE; DEEPPROFILE } from '../modules/deepprofiler.nf'
 include { PYCYTOMINER_AGGREGATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
@@ -50,7 +50,7 @@ workflow {
     cohort = CYTOPIPE_CONCAT(normalized.normalized.map { _plate_id, profiles -> profiles }.collect())
     consensus = PYCYTOMINER_CONSENSUS(cohort.combined, features)
 
-    report = CYTOPIPE_REPORT(
+    report = CYTOPIPE_REPORT_DEEPPROFILER(
         normalized.normalized.map { _plate_id, profiles -> profiles }.collect(),
         single_cell.deepprofiler_parquet.map { _plate_id, sc -> sc }.collect(),
         consensus.consensus

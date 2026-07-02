@@ -84,7 +84,7 @@ process CYTOPIPE_CONCAT {
     """
 }
 
-process CYTOPIPE_REPORT {
+process CYTOPIPE_REPORT_DEEPPROFILER {
     label 'cytopipe'
 
     input:
@@ -98,6 +98,24 @@ process CYTOPIPE_REPORT {
     script:
     """
     cytopipe report deepprofiler --engine deepprofiler -o report
+    """
+}
+
+process CYTOPIPE_REPORT_CELLPROFILER {
+    label 'cytopipe'
+
+    input:
+    path(normalized, stageAs: 'cellprofiler/normalized/*')
+    path(selected, stageAs: 'cellprofiler/selected/feature_select.parquet')
+    path(raw, stageAs: 'cellprofiler/raw/*')
+    path(consensus, stageAs: 'cellprofiler/consensus.parquet')
+
+    output:
+    path 'report', emit: report
+
+    script:
+    """
+    cytopipe report cellprofiler --engine cellprofiler -o report
     """
 }
 

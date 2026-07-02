@@ -1,3 +1,24 @@
+process CELLPROFILER_QC {
+    tag { plate_id }
+    label 'cellprofiler'
+
+    input:
+    tuple val(plate_id), path(images, stageAs: 'images/*')
+    path cppipe
+
+    output:
+    tuple val(plate_id), path("${plate_id}"), emit: qc
+
+    script:
+    """
+    mkdir -p ${plate_id}
+    cellprofiler -c -r \\
+        -p ${cppipe} \\
+        -i images \\
+        -o ${plate_id}
+    """
+}
+
 process CELLPROFILER_ILLUM {
     tag { plate_id }
     label 'cellprofiler'
