@@ -1,6 +1,6 @@
 include { CELLPROFILER_NUCLEI } from '../modules/cellprofiler.nf'
 include { plateImages; platemap; deepprofilerFeatures; loadDataChunks } from '../utils.nf'
-include { CYTOPIPE_LOADDATA; CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_CONCAT } from '../modules/cytopipe.nf'
+include { CYTOPIPE_LOADDATA; CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_CONCAT; CYTOPIPE_REPORT } from '../modules/cytopipe.nf'
 include { DEEPPROFILER_PREPARE; DEEPPROFILE } from '../modules/deepprofiler.nf'
 include { PYCYTOMINER_AGGREGATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
@@ -50,14 +50,22 @@ workflow {
     cohort = CYTOPIPE_CONCAT(normalized.normalized.map { _plate_id, profiles -> profiles }.collect())
     consensus = PYCYTOMINER_CONSENSUS(cohort.combined, features)
 
+    report = CYTOPIPE_REPORT(
+        normalized.normalized.map { _plate_id, profiles -> profiles }.collect(),
+        single_cell.deepprofiler_parquet.map { _plate_id, sc -> sc }.collect(),
+        consensus.consensus
+    )
+
     publish:
     raw_profiles = single_cell.deepprofiler_parquet
     normalized_profiles = normalized.normalized
     consensus_profiles  = consensus.consensus
+    report_figures      = report.report
 }
 
 output {
     raw_profiles { path 'deepprofiler/raw' }
     normalized_profiles { path 'deepprofiler/normalized' }
     consensus_profiles  { path 'deepprofiler' }
+    report_figures      { path 'deepprofiler' }
 }
