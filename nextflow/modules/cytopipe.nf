@@ -71,6 +71,7 @@ process CYTOPIPE_DEEPPROFILER_PARQUET {
 
 process CYTOPIPE_CONCAT {
     label 'cytopipe'
+    label 'cohort'
 
     input:
     path 'parts/*'
@@ -86,6 +87,7 @@ process CYTOPIPE_CONCAT {
 
 process CYTOPIPE_REPORT_DEEPPROFILER {
     label 'cytopipe'
+    label 'cohort'
 
     input:
     path(normalized, stageAs: 'deepprofiler/normalized/*')
@@ -103,6 +105,7 @@ process CYTOPIPE_REPORT_DEEPPROFILER {
 
 process CYTOPIPE_REPORT_CELLPROFILER {
     label 'cytopipe'
+    label 'cohort'
 
     input:
     path(normalized, stageAs: 'cellprofiler/normalized/*')

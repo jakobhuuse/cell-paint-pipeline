@@ -71,6 +71,7 @@ process PYCYTOMINER_NORMALIZE {
 
 process PYCYTOMINER_FEATURE_SELECT {
     label 'pycytominer'
+    label 'cohort'
 
     input:
     path profiles
@@ -92,6 +93,7 @@ process PYCYTOMINER_FEATURE_SELECT {
 
 process PYCYTOMINER_CONSENSUS {
     label 'pycytominer'
+    label 'cohort'
 
     input:
     path profiles
