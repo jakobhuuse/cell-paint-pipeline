@@ -7,17 +7,19 @@ workflow {
     main:
     images = plateImages()
 
-    // Diagnostic QC on the raw images
-    qc = CELLPROFILER_QC(images, file(params.qc_cppipe))
-
-    // Illumination is calculated across the whole plate from a base (no-illum) LoadData CSV.
+    // Base (no-illum) LoadData CSV
     base_csv = CYTOPIPE_LOADDATA_BASE(images, false)
+
+    // Diagnostic QC
+    qc_chunks = loadDataChunks(base_csv.csv, images, params.cellprofiler_chunk_size)
+    qc = CELLPROFILER_QC(qc_chunks, file(params.qc_cppipe))
+
     illum = CELLPROFILER_ILLUM(
         images.join(base_csv.csv).map { plate_id, imgs, csv -> tuple(plate_id, csv, imgs) },
         file(params.illum_cppipe)
     )
 
-    // Analysis runs per chunk on a with-illum CSV; thread the per-plate illum dir into each chunk.
+    // Analysis runs per chunk on a with-illum CSV.
     analysis_csv = CYTOPIPE_LOADDATA_ILLUM(images, true)
     chunks = loadDataChunks(analysis_csv.csv, images, params.cellprofiler_chunk_size)
         .combine(illum.illum, by: 0)

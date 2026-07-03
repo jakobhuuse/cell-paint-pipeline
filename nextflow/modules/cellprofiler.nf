@@ -1,21 +1,24 @@
 process CELLPROFILER_QC {
-    tag { plate_id }
+    tag { "${plate_id} chunk ${chunk_id}" }
     label 'cellprofiler'
+    label 'chunked'
 
     input:
-    tuple val(plate_id), path(images, stageAs: 'images/*')
+    tuple val(plate_id), val(chunk_id), path(load_data), path(images, stageAs: 'images/*')
     path cppipe
 
     output:
-    tuple val(plate_id), path("${plate_id}"), emit: qc
+    tuple val(plate_id), path("${plate_id}.chunk${chunk_id}"), emit: qc
 
     script:
     """
-    mkdir -p ${plate_id}
+    mkdir -p ${plate_id}.chunk${chunk_id}
+    sed "s|__IMAGES__|\${PWD}/images|g" ${load_data} > load_data.csv
+
     cellprofiler -c -r \\
         -p ${cppipe} \\
-        -i images \\
-        -o ${plate_id}
+        --data-file load_data.csv \\
+        -o ${plate_id}.chunk${chunk_id}
     """
 }
 
@@ -45,6 +48,7 @@ process CELLPROFILER_ILLUM {
 process CELLPROFILER_ANALYSIS {
     tag { "${plate_id} chunk ${chunk_id}" }
     label 'cellprofiler'
+    label 'chunked'
 
     input:
     tuple val(plate_id), val(chunk_id), path(load_data), path(images, stageAs: 'images/*'), path(illum)
@@ -70,6 +74,7 @@ process CELLPROFILER_ANALYSIS {
 process CELLPROFILER_NUCLEI {
     tag { "${plate_id} chunk ${chunk_id}" }
     label 'cellprofiler'
+    label 'chunked'
 
     input:
     tuple val(plate_id), val(chunk_id), path(load_data), path(images, stageAs: 'images/*')
