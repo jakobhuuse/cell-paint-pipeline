@@ -68,6 +68,8 @@ MeasureImageQuality:[module_num:5|svn_version:'Unknown'|variable_revision_number
     Image count:2
     Scale count:1
     Threshold count:1
+    Scale count:1
+    Threshold count:1
     Select the images to measure:OrigDNA, OrigRNA
     Include the image rescaling value?:No
     Calculate blur metrics?:No
