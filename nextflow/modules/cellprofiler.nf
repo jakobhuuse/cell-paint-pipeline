@@ -81,20 +81,21 @@ process CELLPROFILER_NUCLEI {
     path cppipe
 
     output:
-    tuple val(plate_id), path("${plate_id}.${chunk_id}.Image.csv"), emit: image_csv
-    tuple val(plate_id), path('out/locations/*-Nuclei.csv'),         emit: locations
+    tuple val(plate_id), path("${plate_id}.${chunk_id}.Image.csv"),                  emit: image_csv
+    tuple val(plate_id), path("${plate_id}.chunk${chunk_id}/locations/*-Nuclei.csv"), emit: locations
+    tuple val(plate_id), path("${plate_id}.chunk${chunk_id}"),                       emit: qc
 
     script:
     """
-    mkdir -p out
+    mkdir -p ${plate_id}.chunk${chunk_id}
     sed "s|__IMAGES__|\${PWD}/images|g" ${load_data} > load_data.csv
 
     cellprofiler -c -r \\
         -p ${cppipe} \\
         --data-file load_data.csv \\
-        -o out
+        -o ${plate_id}.chunk${chunk_id}
 
     # Unique per-chunk name so the grouped tables don't collide when staged for the bridge.
-    mv out/Image.csv ${plate_id}.${chunk_id}.Image.csv
+    cp ${plate_id}.chunk${chunk_id}/Image.csv ${plate_id}.${chunk_id}.Image.csv
     """
 }

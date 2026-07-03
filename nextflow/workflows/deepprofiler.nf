@@ -57,14 +57,16 @@ workflow {
     )
 
     publish:
-    raw_profiles = single_cell.deepprofiler_parquet
+    qc_reports          = cellprofiler.qc
+    raw_profiles        = single_cell.deepprofiler_parquet
     normalized_profiles = normalized.normalized
     consensus_profiles  = consensus.consensus
     report_figures      = report.report
 }
 
 output {
-    raw_profiles { path 'deepprofiler/raw' }
+    qc_reports          { path 'deepprofiler/qc' }
+    raw_profiles        { path 'deepprofiler/raw' }
     normalized_profiles { path 'deepprofiler/normalized' }
     consensus_profiles  { path 'deepprofiler' }
     report_figures      { path 'deepprofiler' }
