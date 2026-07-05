@@ -65,7 +65,7 @@ workflow {
 }
 
 output {
-    qc_reports          { path 'deepprofiler/qc' }
+    qc_reports          { path { plate_id, _qc_dir -> "deepprofiler/qc/${plate_id}" } }
     raw_profiles        { path 'deepprofiler/raw' }
     normalized_profiles { path 'deepprofiler/normalized' }
     consensus_profiles  { path 'deepprofiler' }

@@ -57,7 +57,7 @@ workflow {
 }
 
 output {
-    qc_reports          { path 'cellprofiler/qc' }
+    qc_reports          { path { plate_id, _qc_dir -> "cellprofiler/qc/${plate_id}" } }
     raw_profiles        { path 'cellprofiler/raw' }
     normalized_profiles { path 'cellprofiler/normalized' }
     selected_profiles   { path 'cellprofiler' }
