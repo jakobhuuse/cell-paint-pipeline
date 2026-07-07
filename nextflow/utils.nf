@@ -10,37 +10,30 @@ def plateImages() {
         .filter { _id, tifs -> tifs } 
 }
 
-// The image files a chunk's LoadData rows reference (every Image_FileName_Orig* cell), mapped back
-// to the staged File objects so the CellProfiler task stages only the images it needs.
-def imagesForChunk(csvFile, allImages) {
-    def lines = csvFile.readLines()
-    def header = lines[0].split(',')
-    def origCols = (0..<header.size()).findAll { id -> header[id].startsWith('Image_FileName_Orig') }
-    def byName = allImages.collectEntries { img -> [(img.name): img] }
-    lines.tail()
-        .collectMany { line -> def cells = line.split(','); origCols.collect { colId -> cells[colId] } }
-        .unique()
-        .collect { name -> byName[name] }
-        .findAll()
+// Chunk number parsed from a "chunk<N>.<...>" filename.
+def chunkIndex(name) {
+    (name =~ /^chunk(\d+)\./)[0][1] as int
 }
 
-// Slice a per-plate LoadData CSV into chunks of `chunkSize` image-sets.
-def loadDataChunks(csvCh, imagesCh, chunkSize) {
-    csvCh
-        .flatMap { plate_id, csv ->
-            def lines = csv.readLines()
-            def header = lines[0]
-            lines.tail().collate(chunkSize as int).withIndex().collect { rows, i ->
-                ["${plate_id}.chunk${i + 1}.load_data.csv", ([header] + rows).join('\n') + '\n']
+// One item per chunk, carrying the staged image subset that chunk needs. The subset is read from
+// cytopipe's .images.txt manifest, so the driver never parses the CSV.
+def loadDataChunks(chunksCh, imagesCh) {
+    chunksCh
+        .flatMap { plate_id, csvs, manifests ->
+            def csvList = csvs instanceof List ? csvs : [csvs]
+            def manByIdx = (manifests instanceof List ? manifests : [manifests])
+                .collectEntries { man -> [(chunkIndex(man.name)): man] }
+            csvList.collect { csv ->
+                def idx = chunkIndex(csv.name)
+                tuple(plate_id, idx, csv, manByIdx[idx])
             }
         }
-        .collectFile { name, content -> [name, content] }
-        .map { f ->
-            def m = (f.name =~ /^(.+)\.chunk(\d+)\.load_data\.csv$/)[0]
-            tuple(m[1], m[2] as int, f)
-        }
         .combine(imagesCh, by: 0)
-        .map { plate_id, idx, csv, imgs -> tuple(plate_id, idx, csv, imagesForChunk(csv, imgs)) }
+        .map { plate_id, idx, csv, manifest, imgs ->
+            def byName = imgs.collectEntries { img -> [(img.name): img] }
+            def subset = manifest.readLines().findAll { line -> line }.collect { name -> byName[name] }.findAll()
+            tuple(plate_id, idx, csv, subset)
+        }
 }
 
 // Platemap for the run.

@@ -1,6 +1,5 @@
-// The five core functions of pycytominer as processes. 
-// The processes should be used from top to bottom,
-// where DeepProfiler skips annotation and feature selection.
+// The five core pycytominer functions as processes, used top to bottom.
+// DeepProfiler skips annotation and feature selection.
 
 process PYCYTOMINER_AGGREGATE {
     tag { plate_id }

@@ -12,11 +12,11 @@ process CELLPROFILER_QC {
     script:
     """
     mkdir -p chunk${chunk_id}
-    sed "s|__IMAGES__|\${PWD}/images|g" ${load_data} > load_data.csv
 
     cellprofiler -c -r \\
         -p ${cppipe} \\
-        --data-file load_data.csv \\
+        --data-file ${load_data} \\
+        -i "\$PWD" \\
         -o chunk${chunk_id}
     """
 }
@@ -35,11 +35,11 @@ process CELLPROFILER_ILLUM {
     script:
     """
     mkdir -p illum
-    sed "s|__IMAGES__|\${PWD}/images|g" ${load_data} > load_data.csv
 
     cellprofiler -c -r \\
         -p ${cppipe} \\
-        --data-file load_data.csv \\
+        --data-file ${load_data} \\
+        -i "\$PWD" \\
         -o illum
     """
 }
@@ -58,11 +58,11 @@ process CELLPROFILER_ANALYSIS {
     script:
     """
     mkdir -p out
-    sed "s|__IMAGES__|\${PWD}/images|g; s|__ILLUM__|\${PWD}/${illum}|g" ${load_data} > load_data.csv
 
     cellprofiler -c -r \\
         -p ${cppipe} \\
-        --data-file load_data.csv \\
+        --data-file ${load_data} \\
+        -i "\$PWD" \\
         -o out
 
     mv out/measurements.sqlite ${plate_id}.${chunk_id}.sqlite
@@ -85,11 +85,11 @@ process CELLPROFILER_NUCLEI {
     script:
     """
     mkdir -p chunk${chunk_id}
-    sed "s|__IMAGES__|\${PWD}/images|g" ${load_data} > load_data.csv
 
     cellprofiler -c -r \\
         -p ${cppipe} \\
-        --data-file load_data.csv \\
+        --data-file ${load_data} \\
+        -i "\$PWD" \\
         -o chunk${chunk_id}
 
     # Unique per-chunk name so the grouped tables don't collide when staged for the bridge.

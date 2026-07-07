@@ -8,9 +8,9 @@ workflow {
     main:
     images = plateImages()
 
-    loaddata = CYTOPIPE_LOADDATA(images, false)
+    loaddata = CYTOPIPE_LOADDATA(images, false, params.cellprofiler_chunk_size)
 
-    chunks = loadDataChunks(loaddata.csv, images, params.cellprofiler_chunk_size)
+    chunks = loadDataChunks(loaddata.chunks, images)
 
     cellprofiler = CELLPROFILER_NUCLEI(chunks, file(params.nuclei_cppipe))
     

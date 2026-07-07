@@ -5,14 +5,17 @@ process CYTOPIPE_LOADDATA {
     input:
     tuple val(plate_id), path(images, stageAs: 'images/*')
     val with_illum
+    val chunk_size
 
     output:
-    tuple val(plate_id), path("${plate_id}.load_data.csv"), emit: csv
+    tuple val(plate_id), path("${plate_id}.load_data.csv"),                            emit: csv
+    tuple val(plate_id), path('chunks/*.load_data.csv'), path('chunks/*.images.txt'),  emit: chunks
 
     script:
     def illum_flag = with_illum ? '--with-illum' : ''
     """
-    cytopipe loaddata images ${plate_id}.load_data.csv --plate ${plate_id} ${illum_flag}
+    cytopipe loaddata images ${plate_id}.load_data.csv \\
+        --plate ${plate_id} --chunk-size ${chunk_size} ${illum_flag}
     """
 }
 
