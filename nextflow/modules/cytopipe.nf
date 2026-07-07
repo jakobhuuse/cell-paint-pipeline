@@ -52,7 +52,7 @@ process CYTOPIPE_CELLPROFILER_PARQUET {
 
     script:
     """
-    cytopipe convert cellprofiler measurement ${plate_id}.parquet
+    cytopipe convert cellprofiler measurement ${plate_id}.parquet --threads ${task.cpus}
     """
 }
 
@@ -68,7 +68,7 @@ process CYTOPIPE_DEEPPROFILER_PARQUET {
 
     script:
     """
-    cytopipe convert deepprofiler features ${plate_id}.parquet
+    cytopipe convert deepprofiler features ${plate_id}.parquet --threads ${task.cpus}
     """
 }
 
@@ -84,7 +84,7 @@ process CYTOPIPE_CONCAT {
 
     script:
     """
-    cytopipe convert concat parts combined.parquet
+    cytopipe convert concat parts combined.parquet --threads ${task.cpus}
     """
 }
 
