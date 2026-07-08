@@ -20,34 +20,11 @@ stages in between differ (see the diagram below).
 `--pipeline` selects one of two independent branches. Only one runs per invocation, and their
 outputs are namespaced under `<pipeline>/` so they never collide.
 
-```text
-            raw images + platemap.csv
-                        │
-    ┌───────────────────┴───────────────────┐
-    --pipeline cellprofiler                 --pipeline deepprofiler
-    │                                       │
-    CellProfiler                            CellProfiler
-    QC → illum → analysis                   nuclei segmentation only
-    → per-cell measurements (SQLite)        │
-    │                                       │
-    │                                       cytopipe bridge
-    │                                       → DeepProfiler locations + index
-    │                                       │
-    │                                       DeepProfiler (deep learning)
-    │                                       → single-cell embeddings (.npz)
-    │                                       │
-    cytopipe convert                        cytopipe convert
-    → single-cell parquet                   → single-cell parquet
-    │                                       │
-    pycytominer                             pycytominer
-    aggregate → annotate →                  aggregate → normalize →
-    normalize → feature-select →            consensus
-    consensus                               │
-    │                                       │
-    └───────────────────┬───────────────────┘
-                        ▼
-   well- and consensus-level feature profiles
-```
+![Data flow diagram](docs/dataflow.drawio.svg)
+
+The diagram is editable: open [docs/dataflow.drawio.svg](docs/dataflow.drawio.svg) with
+[draw.io](https://www.drawio.com) or the VS Code Draw.io extension (the mxGraph source is embedded
+in the SVG).
 
 ## Architecture
 
@@ -169,6 +146,7 @@ command line with `--<name> <value>` (or in a `-params-file`).
 | `--pycytominer_image` | `cytomining/pycytominer:1.5.1_260603` | pycytominer container image. |
 | `--pycytominer_aggregate_strata_dp` | `Metadata_Plate,Metadata_Well,Metadata_Compound` | Grouping columns for well-level aggregation (DeepProfiler branch). |
 | `--pycytominer_aggregate_strata_cp` | `Metadata_Plate,Metadata_Well` | Grouping columns for well-level aggregation (CellProfiler branch). |
+| `--pycytominer_annotate_join_on` | `Metadata_DestinationWell,Metadata_Well` | Columns to join the platemap (first) onto the profiles (second) during annotation (CellProfiler branch). |
 | `--pycytominer_normalize_samples` | `Metadata_Compound == 'DMSO'` | Query selecting the control samples normalization is fit against. |
 | `--pycytominer_feature_select_ops` | `variance_threshold,correlation_threshold,blocklist` | Feature-selection operations (CellProfiler branch). |
 | `--pycytominer_consensus_columns` | `Metadata_Compound` | Grouping columns for the consensus (per-perturbation) profile. |
