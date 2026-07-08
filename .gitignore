@@ -21,15 +21,18 @@ coverage.xml
 # Environment
 .env
 
-# Project data (raw images, intermediate outputs)
-data/
-
 # Nextflow
 work/
 .nextflow/
 .nextflow.log*
 results/
 run/
+
+# nf-test
+/nf-test
+.nf-test/
+.nf-test-*.nf
+.nf-test.log
 
 # Apptainer / Singularity images
 *.sif

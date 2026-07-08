@@ -1,4 +1,4 @@
-# cell-painting-pipeline — cell-painting feature-extraction pipeline
+# cell-paint-pipeline — cell-paint feature-extraction pipeline
 
 A pipeline that turns raw microscopy images of perturbed cells into per-perturbation
 feature profiles, designed to scale to TB-sized datasets on an HPC cluster.
@@ -42,18 +42,39 @@ raw images
 
 ## Run the pipeline
 
-The CellProfiler and DeepProfiler branches are independent workflows — run whichever you need.
+The CellProfiler and DeepProfiler branches are independent workflows — `main.nf` dispatches
+to one via `--pipeline` (`deepprofiler` (default) or `cellprofiler`).
 
 ```bash
 # Local (Docker)
-nextflow run nextflow/workflows/deepprofiler.nf -profile standard
-nextflow run nextflow/workflows/cellprofiler.nf -profile standard
+nextflow run . -profile standard --pipeline deepprofiler
+nextflow run . -profile standard --pipeline cellprofiler
 
 # Cluster (SLURM + Apptainer) — see deploy/README.md
-nextflow run nextflow/workflows/deepprofiler.nf -profile slurm \
+nextflow run . -profile slurm --pipeline deepprofiler \
     --input_dir /data/input --outdir /data/results
+
+# Remote (pulled straight from GitHub, pinned to a release)
+nextflow run jakobhuuse/cell-paint-pipeline -r v1.0.0 -profile standard --pipeline deepprofiler
 ```
 
 See [conf/README.md](conf/README.md) for the inputs you must supply (CellProfiler `.cppipe`,
 DeepProfiler config/checkpoint, platemap) and [deploy/README.md](deploy/README.md) for OpenStack /
 SLURM setup.
+
+## Tests
+
+All [nf-test](https://www.nf-test.com) tests live in `tests/`. nf-test only supports tag
+*inclusion*, so the fast/slow split is by tag: fast tests carry `fast`, end-to-end ones `integration`.
+
+```bash
+curl -fsSL https://code.askimed.com/install/nf-test | bash   # once, installs ./nf-test
+
+./nf-test test --tag fast                        # fast: Groovy helpers + --pipeline dispatch, no Docker (this is what CI runs)
+./nf-test test --tag integration -profile standard   # slow: runs each branch end-to-end against test/ through real containers
+./nf-test test                                   # everything
+```
+
+The fast tier runs on every push/PR via GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)),
+alongside `nextflow lint`. The integration tier needs the full container stack (and a GPU for
+DeepProfiler), so it is not wired into CI — run it locally or on a self-hosted runner.

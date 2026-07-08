@@ -1,0 +1,21 @@
+nextflow_function {
+
+    name "utils.nf :: deepprofilerFeatures"
+    script "nextflow/utils.nf"
+    function "deepprofilerFeatures"
+    tag "fast"
+    tag "unit"
+
+    test("builds an efficientnet_1..N feature list sized by the embedding dim") {
+        when {
+            params {
+                deepprofiler_embedding_dim = 3
+            }
+            function {}
+        }
+        then {
+            assert function.success
+            assert function.result == "efficientnet_1,efficientnet_2,efficientnet_3"
+        }
+    }
+}

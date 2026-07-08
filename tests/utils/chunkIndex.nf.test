@@ -1,0 +1,36 @@
+nextflow_function {
+
+    name "utils.nf :: chunkIndex"
+    script "nextflow/utils.nf"
+    function "chunkIndex"
+    tag "fast"
+    tag "unit"
+
+    test("parses the numeric chunk id from a chunk<N>.<...> filename") {
+        when {
+            function {
+                """
+                input[0] = "chunk7.load_data.csv"
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == 7
+        }
+    }
+
+    test("handles multi-digit chunk ids") {
+        when {
+            function {
+                """
+                input[0] = "chunk128.images.txt"
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == 128
+        }
+    }
+}

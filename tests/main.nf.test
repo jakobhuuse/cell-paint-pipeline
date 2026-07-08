@@ -1,0 +1,20 @@
+nextflow_pipeline {
+
+    name "main.nf :: --pipeline dispatch"
+    script "main.nf"
+    tag "fast"
+    tag "dispatch"
+
+    test("unknown --pipeline fails fast with a helpful message") {
+        when {
+            params {
+                pipeline = "not-a-real-pipeline"
+            }
+        }
+        then {
+            assert workflow.failed
+            assert workflow.exitStatus != 0
+            assert workflow.trace.tasks().size() == 0
+        }
+    }
+}

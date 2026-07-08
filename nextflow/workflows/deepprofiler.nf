@@ -4,7 +4,7 @@ include { CYTOPIPE_LOADDATA; CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYT
 include { DEEPPROFILER_PREPARE; DEEPPROFILE } from '../modules/deepprofiler.nf'
 include { PYCYTOMINER_AGGREGATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
-workflow {
+workflow DEEPPROFILER {
     main:
     images = plateImages()
 
@@ -56,18 +56,10 @@ workflow {
         consensus.consensus
     )
 
-    publish:
+    emit:
     qc_reports          = cellprofiler.qc
     raw_profiles        = single_cell.deepprofiler_parquet
     normalized_profiles = normalized.normalized
     consensus_profiles  = consensus.consensus
     report_figures      = report.report
-}
-
-output {
-    qc_reports          { path { plate_id, _qc_dir -> "deepprofiler/qc/${plate_id}" } }
-    raw_profiles        { path 'deepprofiler/raw' }
-    normalized_profiles { path 'deepprofiler/normalized' }
-    consensus_profiles  { path 'deepprofiler' }
-    report_figures      { path 'deepprofiler' }
 }

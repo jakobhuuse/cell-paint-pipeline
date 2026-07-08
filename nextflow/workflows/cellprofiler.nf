@@ -3,7 +3,7 @@ include { plateImages; loadDataChunks; platemap } from '../utils.nf'
 include { CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_BASE; CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_ILLUM; CYTOPIPE_CELLPROFILER_PARQUET; CYTOPIPE_CONCAT; CYTOPIPE_REPORT_CELLPROFILER } from '../modules/cytopipe.nf'
 include { PYCYTOMINER_AGGREGATE; PYCYTOMINER_ANNOTATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_FEATURE_SELECT; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
-workflow {
+workflow CELLPROFILER {
     main:
     images = plateImages()
 
@@ -48,20 +48,11 @@ workflow {
         consensus.consensus
     )
 
-    publish:
+    emit:
     qc_reports          = qc.qc
     raw_profiles        = single_cell.cellprofiler_parquet
     normalized_profiles = normalized.normalized
     selected_profiles   = selected.selected
     consensus_profiles  = consensus.consensus
     report_figures      = report.report
-}
-
-output {
-    qc_reports          { path { plate_id, _qc_dir -> "cellprofiler/qc/${plate_id}" } }
-    raw_profiles        { path 'cellprofiler/raw' }
-    normalized_profiles { path 'cellprofiler/normalized' }
-    selected_profiles   { path 'cellprofiler' }
-    consensus_profiles  { path 'cellprofiler' }
-    report_figures      { path 'cellprofiler' }
 }
