@@ -1,144 +1,172 @@
 # Deploying on OpenStack (self-managed SLURM cluster)
 
-Runbook for running this pipeline on a private OpenStack tenant where you can manage **instances
-and volumes only** (no Magnum/Heat/Manila admin), access is **SSH**, there is **no GPU**, and each
-instance is ≤ 16 vCPU / 50 GB RAM with one shared **Cinder volume** ≤ 80 TB.
+Runbook for running this pipeline on a private OpenStack tenant with **instance/volume-only**
+access (no Magnum/Heat/Manila), over **SSH**, **no GPU**, instances ≤16 vCPU/50GB RAM sharing one
+**Cinder volume**.
 
-It stands up a small SLURM cluster: one **head** node (slurmctld + Nextflow driver + NFS server
-exporting the volume) and N **compute** nodes (slurmd + Apptainer), all sharing `/data` over NFS.
-The pipeline runs with `-profile slurm` from [../nextflow.config](../nextflow.config).
+It stands up a small SLURM cluster: one **head** node (slurmctld, Nextflow driver, NFS server
+exporting the volume) and N **compute** nodes (slurmd, Apptainer), all sharing `/data` over NFS.
+Runs with `-profile slurm` from [../nextflow.config](../nextflow.config).
 
-```
-SSH ─► HEAD (slurmctld, nextflow, NFS server, /data on 80 TB Cinder vol)
-            │ NFS /data  (identical path everywhere)
-   COMPUTE1 … COMPUTEN  (slurmd, apptainer, 16 vCPU / 50 GB each)
-```
-
-`/data` holds `work/` (Nextflow), `apptainer-cache/`, `input/` (raw images + `platemap.csv`), `results/`.
+`/data` holds:
+- `cell-painting-pipeline` - Repository for the Cellprofiler and Deepprofiler workflows
+- `work/`: Nextflow's working directory
+- `apptainer-cache/`: shared container images
+- `input/`: raw images + `platemap.csv`
+- `results/`: pipeline outputs
 
 ## Files here
 
 | Path | Purpose |
 |------|---------|
-| `cloud-init/head.yaml`        | Head-node boot config — installs everything via one re-runnable script |
-| `cloud-init/compute.yaml`     | Compute-node boot config — same re-runnable script pattern |
-| `cloud-init/render.sh`        | Fills the templates from `cluster.env` → paste-ready `*.local.yaml` (no API) |
-| `cloud-init/cluster.env.example` | The handful of values you set per cluster |
-| `slurm/slurm.conf.template`   | Reference SLURM config (also embedded in the cloud-init files) |
-| `slurm/munge.key.example`     | How the shared munge secret is generated (the real key is git-ignored) |
-| `apptainer/prefetch-images.sh`| Warm the shared image cache before the first run |
+| `head.yaml`        | Head-node boot config, one re-runnable setup script |
+| `compute.yaml`     | Compute-node boot config, same pattern |
+| `render.sh`        | Fills templates from `cluster.env` → paste-ready `*.local.yaml` |
+| `cluster.env.example` | The values you set per cluster |
 
 ## Prerequisites
 
-- An Ubuntu **24.04** cloud image, an SSH keypair, and quota for: 1 head + N compute instances,
-  one ≤ 80 TB Cinder volume, one security group.
-- A tenant (private) network all instances share; note its **CIDR** (e.g. `10.0.0.0/24`).
+- Ubuntu **24.04** cloud image, an SSH keypair, and quota for 1 head + N compute instances, one
+  Cinder volume, one security group.
+- A tenant network shared by all instances. Note its **CIDR** (e.g. `10.0.0.0/24`).
 
-Provisioning is done in the **Horizon dashboard** (no OpenStack CLI/API needed); everything after
-the VMs exist is over **SSH**. Each user works in their own Horizon login → their own project.
+Provisioning happens in the **Openstack dashboard** (no CLI/API needed). Everything after the VMs
+exist is over SSH.
 
-## Configure — render the cloud-init (no API)
+## Before you build the cluster: de-risk on one node
 
-`render.sh` fills the templates from a small `cluster.env` and generates the shared munge key, so
-you never hand-edit YAML or paste secrets twice:
+Validate on a single instance first:
 
 ```bash
-cd deploy/cloud-init
-cp cluster.env.example cluster.env     # edit: HEAD_HOST, HEAD_IP, TENANT_CIDR, COMPUTE_NODES, COMPUTE_HOSTS
+nextflow run nextflow/workflows/deepprofiler.nf \
+    -with-apptainer --input_dir /data/input --outdir /data/results
+```
+
+Run `testdata`, then one real plate end-to-end for both workflows. This confirms the images run
+**natively on x86-64** (no QEMU emulation, unlike Apple-Silicon dev) and gives you a
+**DeepProfiler-on-CPU timing number** before committing hardware.
+
+## Configure the cluster
+
+`render.sh` fills the cloud-init templates from `cluster.env` and generates the shared munge key,
+so you never hand-edit YAML or paste secrets.
+
+**Before launching the head node:**
+
+```bash
+cd deploy
+cp cluster.env.example cluster.env     # edit: HEAD_HOST, TENANT_CIDR, COMPUTE_NODES, CPUS, REAL_MEMORY, MEM_SPEC_LIMIT
 ./render.sh                            # -> head.local.yaml, compute.local.yaml (git-ignored)
 ```
 
-You don't know `HEAD_IP` until the head boots, so the usual order is: launch the head → read its
-internal IP from Horizon → put it in `cluster.env` → `./render.sh` → launch compute nodes.
-`CPUs=16 RealMemory=48000` in the templates assume the 16 vCPU / 50 GB flavor — adjust in
-`head.yaml`/`compute.yaml` if yours differs (RealMemory in MB, leave headroom under total RAM).
+**After the head boots:** read its internal IP from OpenStack, set `HEAD_IP` in `cluster.env`, then
+re-run `./render.sh`. Only `compute.local.yaml` needs `HEAD_IP` (for its NFS mount and
+`/etc/hosts` entry), so re-render before launching the compute nodes.
 
-## Step 1 — Horizon: keypair, security group, volume
+`CPUS`/`REAL_MEMORY`/`MEM_SPEC_LIMIT` in `cluster.env` must match the flavor you launch. There
+are no defaults: `render.sh` refuses to run without them, and `cluster-setup.sh` refuses to run
+without them too (RealMemory/MemSpecLimit are in MB, leave headroom under the flavor's total RAM).
 
-- *Compute → Key Pairs → Import Public Key* — your `~/.ssh/id_*.pub`.
-- *Network → Security Groups → Create* `cp-cluster`, then *Manage Rules → Add Rule*:
-  - **SSH (TCP 22)** with Remote = CIDR `<your-ip>/32`.
-  - A rule with **Remote = Security Group `cp-cluster`**, port range *all* — lets the nodes talk
-    slurm (6817/6818), NFS (2049/111/mountd) and munge to each other without pinning ports.
-- *Volumes → Volumes → Create Volume* — size up to 80 TB.
+For a different flavor on an already-running node, re-run the script by hand with new values,
+no re-render needed:
 
-## Step 2 — Horizon: launch the head node
+```bash
+sudo CPUS=32 REAL_MEMORY=98000 MEM_SPEC_LIMIT=10240 /usr/local/sbin/cluster-setup.sh
+```
+
+## Deploy
+
+### 1. OpenStack: keypair, security group, volume
+
+- *Compute → Key Pairs → Import Public Key*: your `~/.ssh/id_*.pub`.
+- *Network → Security Groups → Create* `cp-cluster`, then add rules:
+  - SSH (TCP 22), Remote = your IP `/32`.
+  - Remote = security group `cp-cluster`, all ports. Lets nodes talk slurm/NFS/munge freely
+    among themselves.
+- *Volumes → Create Volume*: up to 80TB.
+
+### 2. OpenStack: launch the head node
 
 *Compute → Instances → Launch Instance*:
 - **Details**: name = `head` (must equal `HEAD_HOST`).
-- **Source**: Ubuntu 24.04 image. **Flavor**: your 16 vCPU / 50 GB.
-- **Networks**: your tenant network. **Security Groups**: `cp-cluster`. **Key Pair**: yours.
+- **Source**: Ubuntu 24.04. **Flavor**: your choice, matching `CPUS`/`REAL_MEMORY` in
+  `cluster.env` (see Configure the cluster).
+- **Networks**: tenant network. **Security Groups**: `cp-cluster`. **Key Pair**: yours.
 - **Configuration → Customization Script**: paste `head.local.yaml`.
 
-After it boots: note its **internal IP** (Instances list) → set `HEAD_IP` in `cluster.env`. Then
-*Instances → head → Attach Volume* → attach your volume (it appears as `/dev/vdb`).
+Once it boots, note its internal IP (Instances list) → set `HEAD_IP` in `cluster.env`. Then attach
+your volume: *Instances → head → Attach Volume* (appears as `/dev/vdb`).
 
-The boot script runs *before* the volume is attached, so `/data` + NFS aren't set up on the first
-pass. Attach the volume, then **re-run the (idempotent) setup script** to pick it up:
+The boot script runs before the volume is attached, so `/data`/NFS aren't ready yet. Re-run the
+idempotent setup script to pick it up:
 
 ```bash
 ssh ubuntu@<head-ip>
-cloud-init status --wait                 # first-boot script finished (slurmctld up)
+cloud-init status --wait                 # first-boot script finished
 sudo /usr/local/sbin/cluster-setup.sh    # now sees /dev/vdb → formats, mounts, exports /data
 findmnt /data && sinfo
 ```
 
-`cluster-setup.sh` is safe to re-run any time — it's how you recover a node that came up wrong
-(it rewrites the configs/munge key and restarts the daemons) without relaunching it.
+`cluster-setup.sh` is safe to re-run any time. It's how you recover a node that came up wrong, or
+resize its resources after a flavor change (see Configure the cluster).
 
-## Step 3 — Horizon: launch the compute nodes
+### 3. OpenStack: launch the compute nodes
 
-`./render.sh` again (now that `HEAD_IP` is set) and launch the compute instances named
-`compute-1 … compute-10` (matching `COMPUTE_NODES=compute-[1-10]`), same image/SG/keypair, pasting
+Re-run `./render.sh` (now that `HEAD_IP` is set), then launch `compute-1 … compute-10` (matching
+`COMPUTE_NODES=compute-[1-10]`) with the same image/security group/keypair, pasting
 `compute.local.yaml` as the customization script. Each mounts `<head-ip>:/data` and registers with
 the controller.
 
-## Step 4 — Register the compute nodes on the head
+### 4. Register the compute nodes on the head
 
-Compute IPs aren't known until they boot, so add them to the head's `/etc/hosts` now (render.sh
-prints this exact line from your `COMPUTE_HOSTS`), then **restart** slurmctld so it resolves the new
-addresses (a plain `reconfigure` does *not* re-resolve node addresses):
+Compute IPs aren't known until boot, so add them to the head's `/etc/hosts` now (get each
+instance's internal IP from the OpenStack Instances list), then restart slurmctld. A plain
+`reconfigure` won't re-resolve addresses:
 
 ```bash
 ssh ubuntu@<head-ip>
 printf '10.0.0.11 compute-1\n10.0.0.12 compute-2\n...\n10.0.0.20 compute-10\n' | sudo tee -a /etc/hosts
 sudo systemctl restart slurmctld
-sinfo                 # nodes should show idle (not down/drain)
+sinfo                 # nodes should show idle, not down/drain
 srun -N1 hostname     # smoke-test job placement
 ```
 
-If a node is `down`/`drain`: `sudo scontrol update nodename=compute-1 state=resume` after fixing the
-cause (usually munge key mismatch or clock skew — see Troubleshooting).
+If a node is `down`/`drain`: fix the cause (usually munge key mismatch or clock skew, see
+Troubleshooting), then `sudo scontrol update nodename=compute-1 state=resume`.
 
-## Step 5 — Get the code and warm the image cache
-
-On the head (the repo's `conf/` ships the `.cppipe` / DeepProfiler config + model, so cloning is
-how those inputs land):
+### 5. Get the code
 
 ```bash
 ssh ubuntu@<head-ip>
-git clone https://github.com/jakobhuuse/cell-painting-pipeline.git
-cd cell-painting-pipeline
-./deploy/apptainer/prefetch-images.sh        # pulls the 4 images into /data/apptainer-cache
+git clone https://github.com/jakobhuuse/cell-painting-pipeline.git /data/cell-painting-pipeline
+cd /data/cell-painting-pipeline
 ```
 
-## Step 6 — Stage inputs and run
+Clone into `/data`, not the home directory: Nextflow keeps its own `.nextflow` cache and session
+state in whatever directory you run it from (separate from `workDir`), and that grows large over
+a long run, too large for the head's small root disk to hold.
 
-Put raw images + `platemap.csv` under `/data/input`, reproducing the layout from `testdata/`:
+Cloning also lands `conf/`: the `.cppipe` files and DeepProfiler config/model. The apptainer
+images pull on first use, so the first `nextflow run` will be slower while it fetches and converts
+them into `/data/apptainer-cache`.
+
+## Run the pipeline
+
+Stage raw images + `platemap.csv` under `/data/input`, matching the layout in `testdata/`:
 
 ```text
 /data/input/<batch-date>/<plate-id>/<TimePoint_x>/*.tif
 /data/input/platemap.csv
 ```
 
-Stage by SSH — e.g. from your machine: `rsync -av ./mydata/ ubuntu@<head-ip>:/data/input/`
-(or pull from Swift on the head if your project has object storage reachable internally).
+e.g. `rsync -av ./mydata/ ubuntu@<head-ip>:/data/input/` (or pull from Swift if reachable
+internally).
 
-Run the driver under **tmux** so it survives SSH disconnects (it lives for the whole pipeline):
+Run under **tmux** so the driver survives SSH disconnects:
 
 ```bash
 tmux new -s run
-cd ~/cell-painting-pipeline
+cd /data/cell-painting-pipeline
 
 # DeepProfiler branch
 nextflow run nextflow/workflows/deepprofiler.nf -profile slurm \
@@ -149,56 +177,39 @@ nextflow run nextflow/workflows/cellprofiler.nf -profile slurm \
     --input_dir /data/input --outdir /data/results
 ```
 
-`workDir` is `/data/work` and `cache='lenient'` is set, so `nextflow run ... -resume` after an
-interruption re-uses completed tasks cheaply.
+`workDir` is `/data/work` with `cache = 'lenient'`, so `nextflow run ... -resume` after an
+interruption cheaply re-uses completed tasks.
 
-## Step 7 — Scale out
+## Scale out
 
-Boot more `computeN` instances, add their `/etc/hosts` line on the head and their names to
-`__COMPUTE_NODES__` in `/etc/slurm/slurm.conf` on **every** node, then `sudo scontrol reconfigure`.
-**Faster:** after Step 4, snapshot a configured compute node and boot future ones from that
-snapshot — cloud-init still mounts `/data` and starts slurmd, but skips package installs.
+Boot more `computeN` instances, add their `/etc/hosts` line on the head, add their names to
+`NodeName` in `/etc/slurm/slurm.conf` on **every** node, then `sudo scontrol reconfigure`.
 
-## Milestone 0 — single-node de-risk (do this first)
-
-Before building the cluster, validate on **one** 16 vCPU / 50 GB instance with the volume attached
-directly (no NFS) and Apptainer, using the default `local` executor:
-
-```bash
-nextflow run nextflow/workflows/deepprofiler.nf \
-    -with-apptainer --input_dir /data/input --outdir /data/results   # or add a local apptainer profile
-```
-
-Run `testdata`, then **one real plate end-to-end** for both workflows. This confirms the images run
-**natively on x86-64** (no QEMU emulation, unlike Apple-Silicon dev) and — critically — gives you
-the **DeepProfiler-on-CPU timing number** to extrapolate before committing hardware.
-
-> ⚠️ **No GPU is the throughput risk.** DeepProfiler's TF inference runs on CPU here — functional but
-> potentially very slow at TB scale. If M0 timing is prohibitive, decide between: leaning on the
-> CellProfiler-only workflow (CPU-native, scales cleanly), requesting a GPU flavor from your
-> OpenStack admin, or accepting long wall-clock with wide scale-out across compute nodes.
+**Faster:** after step 4, snapshot a configured compute node and boot future ones from it.
+cloud-init still mounts `/data` and starts slurmd, but skips package installs.
 
 ## Troubleshooting
 
-- **First move for any node that came up wrong:** SSH in and `sudo /usr/local/sbin/cluster-setup.sh`.
-  It re-installs packages, rewrites `slurm.conf`/`cgroup.conf`/munge key, fixes `/etc/hosts`, and
-  restarts the daemons — idempotent, no relaunch needed. Then `scontrol ping` / `sinfo` from the head.
-- **`slurmd`: "DNS SRV lookup failed" / "failed to load configs"** — `/etc/slurm/slurm.conf` is
-  missing, so slurmd fell back to *configless* mode (there's no SRV record). Re-run the setup script.
-- **`slurmctld`: `getaddrinfo() failed` / `address family '0' not supported`** — a node name didn't
-  resolve when the daemon started, leaving an empty address slot. Ensure `head` and every `computeN`
-  are in `/etc/hosts` (DNS isn't relied on), then **restart** the daemon (not `reconfigure` — node
-  addresses are resolved only at start): `sudo systemctl restart slurmctld` (head) / `slurmd` (compute).
-- **`scontrol reconfigure` → "Socket timed out"** — the controller isn't answering; use
-  `sudo systemctl restart slurmctld` instead and check `scontrol ping`.
-- **Nodes `down`/`drain`, "Munge decode failed"** — munge keys differ or clocks drift. Re-run the
-  setup script on the affected node so it gets the same key; `chrony` keeps clocks synced.
-- **`srun`/jobs hang `PD` (pending)** — `scontrol show node computeX`; check `RealMemory`/`CPUs` in
-  `slurm.conf` don't exceed the flavor (over-spec drains the node).
-- **NFS permission errors** — all nodes use the default `ubuntu` user (uid 1000), so writes line up;
-  if you added other users, keep uids consistent across nodes. For more write throughput on `/data`,
-  consider `async` in `/etc/exports` (faster, weaker crash durability) — `-resume` recovers work.
-- **Apptainer cytotable `getuser()`/`.duckdb` error** — the slurm profile injects
-  `--env USER=cytopipe,HOME=/tmp --no-home`; verify it's in effect (`nextflow config -profile slurm`).
-- **`apptainer` not found after boot** — the PPA may lag a fresh Ubuntu release; install the `.deb`
-  from <https://github.com/apptainer/apptainer/releases> instead.
+- **Any node came up wrong**: SSH in and run `sudo /usr/local/sbin/cluster-setup.sh`. It's
+  idempotent: rewrites `slurm.conf`/`cgroup.conf`/munge key, fixes `/etc/hosts`, restarts daemons.
+  Confirm with `scontrol ping` / `sinfo`.
+- **`slurmd`: "DNS SRV lookup failed" / "failed to load configs"**. `/etc/slurm/slurm.conf` is
+  missing, so slurmd fell back to configless mode (no SRV record here). Re-run the setup script.
+- **`slurmctld`: `getaddrinfo() failed` / `address family '0' not supported`**. A node name
+  didn't resolve at daemon start. Ensure `head` and every `computeN` are in `/etc/hosts`, then
+  **restart** (not `reconfigure`, since addresses resolve only at start):
+  `sudo systemctl restart slurmctld` (head) / `slurmd` (compute).
+- **`scontrol reconfigure` → "Socket timed out"**: controller isn't answering. Run
+  `sudo systemctl restart slurmctld`, then check `scontrol ping`.
+- **Nodes `down`/`drain`, "Munge decode failed"**: munge keys differ, or clocks drifted. Re-run
+  the setup script on the affected node. `chrony` keeps clocks synced.
+- **`srun`/jobs hang `PD` (pending)**: check `scontrol show node computeX`. `RealMemory`/`CPUs`
+  in `slurm.conf` must not exceed the flavor (over-spec drains the node). Re-run
+  `cluster-setup.sh` with corrected `CPUS`/`REAL_MEMORY` env vars if they're wrong.
+- **NFS permission errors**: all nodes default to the `ubuntu` user (uid 1000), so keep uids
+  consistent if you add others. For more write throughput, `async` in `/etc/exports` trades crash
+  durability for speed. `-resume` recovers work either way.
+- **Apptainer cytotable `getuser()`/`.duckdb` error**: the slurm profile injects
+  `--env USER=cytopipe,HOME=/tmp --no-home`. Verify with `nextflow config -profile slurm`.
+- **`apptainer` not found after boot**: the PPA may lag a fresh Ubuntu release. Install the
+  `.deb` from <https://github.com/apptainer/apptainer/releases> instead.

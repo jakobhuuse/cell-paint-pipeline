@@ -47,7 +47,7 @@ CLAUDE.md
 params.yaml
 .nextflow.log
 
-# Cluster secrets / locally-rendered deploy configs (never commit) — see deploy/slurm/munge.key.example
+# Cluster secrets / locally-rendered deploy configs (never commit) — see deploy/cloud-init/render.sh
 munge.key
 cluster.env
 *.local.yaml
