@@ -9,11 +9,11 @@ exporting the volume) and N **compute** nodes (slurmd, Apptainer), all sharing `
 Runs with `-profile slurm` from [../nextflow.config](../nextflow.config).
 
 `/data` holds:
-- `run/`: where you launch Nextflow; its `.nextflow/` cache and `NXF_HOME` assets stay off the small root disk
-- `work/`: Nextflow's working directory
+- `<experiment>/`: one folder per experiment (e.g. `2025-W51/`), holding its own `input/` (raw images
+  + `platemap.csv`), `results/`, and `.nextflow/` cache. You launch `nextflow run` from in here.
+- `work/`: Nextflow's shared working directory
 - `apptainer-cache/`: shared container images
-- `input/`: raw images + `platemap.csv`
-- `results/`: pipeline outputs
+- `.nextflow/`: `NXF_HOME`, the pulled pipeline copy + framework cache, kept off the small root disk
 
 ## Files here
 
@@ -35,17 +35,16 @@ exist is over SSH.
 
 ## Before you build the cluster: de-risk on one node
 
-Validate on a single instance first:
+Validate on a single instance first. With no arguments it runs the bundled `tests/data` through the
+default `deepprofiler` pipeline into `results/`, so nothing needs staging:
 
 ```bash
-nextflow run jakobhuuse/cell-paint-pipeline -r v1.0.0 \
-    -with-apptainer --pipeline deepprofiler --input_dir /data/input --outdir /data/results
+nextflow run jakobhuuse/cell-paint-pipeline -r v1.0.0 -with-apptainer
 ```
 
-Run `testdata` (drop `--input_dir` to use the bundled `tests/data`), then one real plate
-end-to-end for both `--pipeline` branches. This confirms the images run
-**natively on x86-64** (no QEMU emulation, unlike Apple-Silicon dev) and gives you a
-**DeepProfiler-on-CPU timing number** before committing hardware.
+This confirms the images run **natively on x86-64** (no QEMU emulation, unlike Apple-Silicon dev).
+Then run one real plate end-to-end for both `--pipeline` branches (pass `--input_dir <path>`) to get
+a **DeepProfiler-on-CPU timing number** before committing hardware.
 
 ## Configure the cluster
 
@@ -135,55 +134,68 @@ srun -N1 hostname     # smoke-test job placement
 If a node is `down`/`drain`: fix the cause (usually munge key mismatch or clock skew, see
 Troubleshooting), then `sudo scontrol update nodename=compute-1 state=resume`.
 
-### 5. Prepare the run directory
+### 5. Prepare an experiment folder
 
 No clone needed: Nextflow pulls the pipeline straight from GitHub (`jakobhuuse/cell-paint-pipeline`)
 and resolves its bundled `conf/` (the `.cppipe` files and DeepProfiler config/model) from inside
-the pulled copy. You only need a directory to launch from, on `/data`:
+the pulled copy. Each experiment gets its own folder under `/data`, with the raw images staged in an
+`input/` subfolder. You launch `nextflow run` from inside that folder, so its `results/` and
+`.nextflow/` cache stay self-contained per experiment:
+
+```text
+/data/<experiment>/                 # e.g. /data/2025-W51, cd here to launch
+    input/
+        <batch-date>/<plate-id>/<TimePoint_x>/*.tif
+        platemap.csv
+    results/                        # created by the run
+    .nextflow/                      # per-experiment cache + session state, enables -resume
+```
 
 ```bash
 ssh ubuntu@<head-ip>
-mkdir -p /data/run
-echo 'export NXF_HOME=/data/.nextflow' >> ~/.bashrc   # keep pulled assets + cache on the volume
+mkdir -p /data/2025-W51/input
 ```
 
-Launch from `/data`, not the home directory: Nextflow keeps its `.nextflow` cache and session state
-in whatever directory you run it from (separate from `workDir`), and that grows large over a long
-run, too large for the head's small root disk to hold. Pointing `NXF_HOME` at `/data` does the same
-for the pulled pipeline and the framework cache.
+Launch from inside the experiment folder, not the home directory: Nextflow keeps its `.nextflow`
+cache and session state in whatever directory you run it from (separate from the shared `workDir` at
+`/data/work`), and that grows large over a long run, too large for the head's small root disk to
+hold. `NXF_HOME` is already exported to `/data/.nextflow` by `cluster-setup.sh` (via
+`/etc/profile.d/cluster-tmp.sh`), so the pulled pipeline copy and the framework cache stay on the
+volume too.
 
 The apptainer images pull on first use, so the first `nextflow run` will be slower while it fetches
 and converts them into `/data/apptainer-cache`.
 
 ## Run the pipeline
 
-Stage raw images + `platemap.csv` under `/data/input`, matching the layout in `testdata/`:
+Stage raw images + `platemap.csv` into the experiment's `input/`, matching the layout in `testdata/`:
 
 ```text
-/data/input/<batch-date>/<plate-id>/<TimePoint_x>/*.tif
-/data/input/platemap.csv
+/data/2025-W51/input/<batch-date>/<plate-id>/<TimePoint_x>/*.tif
+/data/2025-W51/input/platemap.csv
 ```
 
-e.g. `rsync -av ./mydata/ ubuntu@<head-ip>:/data/input/` (or pull from Swift if reachable
+e.g. `rsync -av ./mydata/ ubuntu@<head-ip>:/data/2025-W51/input/` (or pull from Swift if reachable
 internally).
 
-Run under **tmux** so the driver survives SSH disconnects:
+Run under **tmux** so the driver survives SSH disconnects. `cd` into the experiment folder and pass
+the paths relative to it (`--input_dir input --outdir results`):
 
 ```bash
-tmux new -s run
-cd /data/run
+tmux new -s 2025-W51
+cd /data/2025-W51
 
 # DeepProfiler branch
 nextflow run jakobhuuse/cell-paint-pipeline -r v1.0.0 -profile slurm \
-    --pipeline deepprofiler --input_dir /data/input --outdir /data/results
+    --pipeline deepprofiler --input_dir input --outdir results
 
 # CellProfiler branch (independent workflow)
 nextflow run jakobhuuse/cell-paint-pipeline -r v1.0.0 -profile slurm \
-    --pipeline cellprofiler --input_dir /data/input --outdir /data/results
+    --pipeline cellprofiler --input_dir input --outdir results
 ```
 
-`workDir` is `/data/work` with `cache = 'lenient'`, so `nextflow run ... -resume` after an
-interruption cheaply re-uses completed tasks.
+`workDir` is the shared `/data/work` with `cache = 'lenient'`, so `nextflow run ... -resume` from the
+same experiment folder cheaply re-uses completed tasks.
 
 ## Scale out
 

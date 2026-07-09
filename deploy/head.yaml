@@ -97,9 +97,10 @@ write_files:
         grep -q ' /data ' /etc/fstab || echo "/dev/vdb /data xfs defaults,_netdev 0 2" >> /etc/fstab
         mount -a
         chown ubuntu:ubuntu /data        # mountpoint is root-owned after mkfs; let ubuntu write under it
-        install -d -o ubuntu -g ubuntu /data/work /data/apptainer-cache /data/input /data/results /data/tmp
-        # Keep big temp/scratch off the small root disk: SIF builds, the JVM perf file, nextflow temp.
-        printf 'export TMPDIR=/data/tmp\nexport APPTAINER_TMPDIR=/data/tmp\nexport APPTAINER_CACHEDIR=/data/apptainer-cache\nexport NXF_OPTS="-Djava.io.tmpdir=/data/tmp"\n' > /etc/profile.d/cluster-tmp.sh
+        install -d -o ubuntu -g ubuntu /data/work /data/apptainer-cache /data/input /data/results /data/tmp /data/.nextflow
+        # Keep big temp/scratch + Nextflow assets off the small root disk: SIF builds, the JVM perf
+        # file, nextflow temp, and NXF_HOME (pulled pipeline copy + framework/plugin cache).
+        printf 'export TMPDIR=/data/tmp\nexport APPTAINER_TMPDIR=/data/tmp\nexport APPTAINER_CACHEDIR=/data/apptainer-cache\nexport NXF_HOME=/data/.nextflow\nexport NXF_OPTS="-Djava.io.tmpdir=/data/tmp"\n' > /etc/profile.d/cluster-tmp.sh
         grep -q '^/data ' /etc/exports || echo "/data __TENANT_CIDR__(rw,sync,no_subtree_check)" >> /etc/exports
         systemctl enable --now nfs-kernel-server
         exportfs -ra

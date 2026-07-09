@@ -76,11 +76,14 @@ write_files:
       grep -q ' __HEAD_HOST__$' /etc/hosts || echo "__HEAD_IP__ __HEAD_HOST__" >> /etc/hosts
       grep -q " $(hostname)\$" /etc/hosts || echo "$SELF_IP $(hostname)" >> /etc/hosts
 
-      # --- dirs + shared /data over NFS (nofail so a not-yet-ready head can't block boot) ---
+      # --- dirs + shared /data over NFS. nofail keeps boot unblocked. x-systemd.automount mounts
+      #     /data on first access, so a node that boots before the head's NFS is ready still gets
+      #     /data when a job touches it, instead of silently running against an empty dir. ---
       install -d -o slurm -g slurm /var/spool/slurmd /var/log/slurm
       install -d -m 0755 /data
-      grep -q ' /data ' /etc/fstab || echo "__HEAD_IP__:/data /data nfs rw,_netdev,hard,nofail 0 0" >> /etc/fstab
-      mount -a || echo "WARNING: /data NFS mount failed (head up yet?); retry: sudo mount -a" >&2
+      grep -q ' /data ' /etc/fstab || echo "__HEAD_IP__:/data /data nfs rw,_netdev,hard,nofail,x-systemd.automount,x-systemd.mount-timeout=30 0 0" >> /etc/fstab
+      systemctl daemon-reload
+      systemctl start data.automount 2>/dev/null || mount -a || echo "WARNING: /data not mounted yet, it will mount on first access" >&2
 
       # --- start services only now that config + key exist ---
       systemctl enable --now chrony
