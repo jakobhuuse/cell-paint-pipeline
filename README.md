@@ -22,10 +22,6 @@ outputs are namespaced under `<pipeline>/` so they never collide.
 
 ![Data flow diagram](docs/dataflow.drawio.svg)
 
-The diagram is editable: open [docs/dataflow.drawio.svg](docs/dataflow.drawio.svg) with
-[draw.io](https://www.drawio.com) or the VS Code Draw.io extension (the mxGraph source is embedded
-in the SVG).
-
 ## Architecture
 
 - **Nextflow** orchestrates the DAG and launches every stage as a container. Docker runs it
