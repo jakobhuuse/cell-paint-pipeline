@@ -9,7 +9,7 @@ exporting the volume) and N **compute** nodes (slurmd, Apptainer), all sharing `
 Runs with `-profile slurm` from [../nextflow.config](../nextflow.config).
 
 `/data` holds:
-- `cell-painting-pipeline` - Repository for the Cellprofiler and Deepprofiler workflows
+- `run/`: where you launch Nextflow; its `.nextflow/` cache and `NXF_HOME` assets stay off the small root disk
 - `work/`: Nextflow's working directory
 - `apptainer-cache/`: shared container images
 - `input/`: raw images + `platemap.csv`
@@ -38,11 +38,12 @@ exist is over SSH.
 Validate on a single instance first:
 
 ```bash
-nextflow run nextflow/workflows/deepprofiler.nf \
-    -with-apptainer --input_dir /data/input --outdir /data/results
+nextflow run jakobhuuse/cell-paint-pipeline -r v1.0.0 \
+    -with-apptainer --pipeline deepprofiler --input_dir /data/input --outdir /data/results
 ```
 
-Run `testdata`, then one real plate end-to-end for both workflows. This confirms the images run
+Run `testdata` (drop `--input_dir` to use the bundled `tests/data`), then one real plate
+end-to-end for both `--pipeline` branches. This confirms the images run
 **natively on x86-64** (no QEMU emulation, unlike Apple-Silicon dev) and gives you a
 **DeepProfiler-on-CPU timing number** before committing hardware.
 
@@ -134,21 +135,25 @@ srun -N1 hostname     # smoke-test job placement
 If a node is `down`/`drain`: fix the cause (usually munge key mismatch or clock skew, see
 Troubleshooting), then `sudo scontrol update nodename=compute-1 state=resume`.
 
-### 5. Get the code
+### 5. Prepare the run directory
+
+No clone needed: Nextflow pulls the pipeline straight from GitHub (`jakobhuuse/cell-paint-pipeline`)
+and resolves its bundled `conf/` (the `.cppipe` files and DeepProfiler config/model) from inside
+the pulled copy. You only need a directory to launch from, on `/data`:
 
 ```bash
 ssh ubuntu@<head-ip>
-git clone https://github.com/jakobhuuse/cell-painting-pipeline.git /data/cell-painting-pipeline
-cd /data/cell-painting-pipeline
+mkdir -p /data/run
+echo 'export NXF_HOME=/data/.nextflow' >> ~/.bashrc   # keep pulled assets + cache on the volume
 ```
 
-Clone into `/data`, not the home directory: Nextflow keeps its own `.nextflow` cache and session
-state in whatever directory you run it from (separate from `workDir`), and that grows large over
-a long run, too large for the head's small root disk to hold.
+Launch from `/data`, not the home directory: Nextflow keeps its `.nextflow` cache and session state
+in whatever directory you run it from (separate from `workDir`), and that grows large over a long
+run, too large for the head's small root disk to hold. Pointing `NXF_HOME` at `/data` does the same
+for the pulled pipeline and the framework cache.
 
-Cloning also lands `conf/`: the `.cppipe` files and DeepProfiler config/model. The apptainer
-images pull on first use, so the first `nextflow run` will be slower while it fetches and converts
-them into `/data/apptainer-cache`.
+The apptainer images pull on first use, so the first `nextflow run` will be slower while it fetches
+and converts them into `/data/apptainer-cache`.
 
 ## Run the pipeline
 
@@ -166,15 +171,15 @@ Run under **tmux** so the driver survives SSH disconnects:
 
 ```bash
 tmux new -s run
-cd /data/cell-painting-pipeline
+cd /data/run
 
 # DeepProfiler branch
-nextflow run nextflow/workflows/deepprofiler.nf -profile slurm \
-    --input_dir /data/input --outdir /data/results
+nextflow run jakobhuuse/cell-paint-pipeline -r v1.0.0 -profile slurm \
+    --pipeline deepprofiler --input_dir /data/input --outdir /data/results
 
 # CellProfiler branch (independent workflow)
-nextflow run nextflow/workflows/cellprofiler.nf -profile slurm \
-    --input_dir /data/input --outdir /data/results
+nextflow run jakobhuuse/cell-paint-pipeline -r v1.0.0 -profile slurm \
+    --pipeline cellprofiler --input_dir /data/input --outdir /data/results
 ```
 
 `workDir` is `/data/work` with `cache = 'lenient'`, so `nextflow run ... -resume` after an
