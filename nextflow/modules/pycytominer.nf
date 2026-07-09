@@ -37,10 +37,13 @@ process PYCYTOMINER_ANNOTATE {
 
     script:
     """
+    # Normalize the platemap the same way cytopipe's bridge does.
+    python3 -c "import pandas as pd; df = pd.read_csv('${platemap}', skipinitialspace=True, dtype=str, encoding='utf-8-sig'); df.columns = df.columns.str.strip(); df = df.apply(lambda c: c.str.strip()); df.to_csv('platemap.clean.csv', index=False)"
+
     pycytominer annotate \\
         --profiles "${profiles}" \\
         --output_file "${plate_id}.annotated.parquet" \\
-        --platemap "${platemap}" \\
+        --platemap "platemap.clean.csv" \\
         --join_on '${params.pycytominer_annotate_join_on}' \\
         --output_type parquet
     """
