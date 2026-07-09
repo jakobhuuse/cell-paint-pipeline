@@ -48,7 +48,10 @@ process CYTOPIPE_CELLPROFILER_PARQUET {
     tuple val(plate_id), path(measurement, stageAs: 'measurement/*')
 
     output:
-    tuple val(plate_id), path("${plate_id}.parquet"), emit: cellprofiler_parquet
+    // Optional: a plate whose CellProfiler compartments are all empty (no
+    // segmented objects) yields no single cells, so cytopipe writes no parquet
+    // and the plate drops out of the cohort instead of aborting the run.
+    tuple val(plate_id), path("${plate_id}.parquet"), emit: cellprofiler_parquet, optional: true
 
     script:
     """
