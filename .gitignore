@@ -54,3 +54,11 @@ params.yaml
 munge.key
 cluster.env
 *.local.yaml
+
+# Filled-in launch template: contains a live application credential.
+# Also catches editor backups (head.yaml~, .swp) and `sed -i.bak` output,
+# any of which would hold the same secret. The template is re-included.
+deploy/head.yaml
+deploy/head.yaml.*
+deploy/head.yaml~
+!deploy/head.yaml.example
