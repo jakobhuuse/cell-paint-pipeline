@@ -7,6 +7,7 @@ You create **one head node** in the Horizon dashboard. It builds everything else
 It stands up a small SLURM cluster: one **head** node (slurmctld, Nextflow driver, NFS server exporting the volume) and N **compute** nodes (slurmd, Apptainer), all sharing `/data` over NFS. Runs with `-profile slurm` from [../nextflow.config](../nextflow.config).
 
 `/data` holds:
+
 - `<experiment>/`: one folder per experiment (e.g. `2025-W51/`), holding its own `input/` (raw images + `platemap.csv`), `results/`, and `.nextflow/` cache. You launch `nextflow run` from in here.
 - `work/`: Nextflow's shared working directory
 - `apptainer-cache/`: shared container images
@@ -14,10 +15,10 @@ It stands up a small SLURM cluster: one **head** node (slurmctld, Nextflow drive
 
 ## Files here
 
-| Path | Purpose |
-|------|---------|
-| `head.yaml.example` | Launch template. Copy to `head.yaml` (git-ignored) and fill it in. |
-| `head-setup.sh`     | Idempotent head bootstrap. Fetched and run by the head. |
+| Path                | Purpose                                                             |
+| ------------------- | ------------------------------------------------------------------- |
+| `head.yaml.example` | Launch template. Copy to `head.yaml` (git-ignored) and fill it in.  |
+| `head-setup.sh`     | Idempotent head bootstrap. Fetched and run by the head.             |
 | `cluster.py`        | Cluster management. Installed on the head as the `cluster` command. |
 
 **Secrets never go in a tracked file.** Your application credential goes only in `head.yaml`, which is git-ignored. `head.yaml.example` is tracked and must stay free of real values.
@@ -31,11 +32,20 @@ It stands up a small SLURM cluster: one **head** node (slurmctld, Nextflow drive
 
 ### 1. OpenStack: security group and application credential
 
-*Network → Security Groups → Create* `cp-cluster`, then add rules:
-- SSH (TCP 22), Remote = your IP `/32`.
-- Remote = **security group** `cp-cluster`, all ports. The head reuses its own security groups for every compute node, so this rule is what lets them talk slurm/NFS/munge.
+_Network → Security Groups → Create_ `cp-cluster`. Then _Manage Rules → Add Rule_ for each row below. All three are **Ingress** and **IPv4**.
 
-*Identity → Application Credentials → Create*:
+| Rule       | Remote         | Value        | Why                                                                       |
+| ---------- | -------------- | ------------ | ------------------------------------------------------------------------- |
+| `SSH`      | CIDR           | `0.0.0.0/0`  | Reach the head. See the note below before narrowing this.                 |
+| `ALL TCP`  | Security Group | `cp-cluster` | Slurm (6817/6818 plus ephemeral for `srun`) and NFS (2049) between nodes. |
+| `ALL ICMP` | Security Group | `cp-cluster` | Optional. Lets you `ping` between nodes when debugging.                   |
+
+The head reuses **its own** security groups for every compute node it creates, so the `cp-cluster`-to-`cp-cluster` rule is what lets the cluster talk to itself.
+
+Narrow the SSH rule to your own address `/32` if your tenant hands out publicly routable floating IPs.
+
+_Identity → Application Credentials → Create_:
+
 - Give it the **`member`** role. `reader` cannot create servers and the build will fail.
 - Set an expiry.
 - Copy the ID and secret. The secret is shown once.
@@ -49,20 +59,31 @@ cd deploy
 cp head.yaml.example head.yaml     # head.yaml is git-ignored
 ```
 
-*Compute → Instances → Launch Instance*:
-- **Details**: name = anything (e.g. `cp-head`). The head learns its own name.
-- **Source**: Ubuntu 24.04, **Create New Volume = No**. It defaults to *Yes*, which boots the instance off a new Cinder volume, leaves the flavor's disk unused, and outlives the instance. It is **not** the `/data` volume.
-- **Flavor**: the head runs the Nextflow driver and NFS, not jobs. Modest is fine.
-- **Networks**: your tenant network. **Security Groups**: `cp-cluster`. **Key Pair**: yours. Your key gets propagated to every compute node, which is how you can SSH to them later.
-- **Configuration → Customization Script**: paste your edited `head.yaml`.
+_Compute → Instances → Launch Instance_, then one row per tab of the wizard:
 
-The head boots and installs itself. **It creates nothing else**: no volume, no compute nodes. That is deliberate. Those choices are made on the head with the commands below, where you can see what is actually available and get errors immediately, instead of guessing at launch and then reading cloud-init logs to find out what went wrong.
+| Tab | Set |
+|---|---|
+| Details | Name: anything, e.g. `cp-head`. The head discovers its own name. |
+| Source | Ubuntu 24.04, and **Create New Volume: No** |
+| Flavor | Anything modest. The head runs the Nextflow driver and NFS, not jobs. |
+| Networks | Your tenant network |
+| Security Groups | `cp-cluster` |
+| Key Pair | Yours |
+| Configuration | Paste your edited `head.yaml` into **Customization Script** |
+
+**Create New Volume** defaults to _Yes_, which boots the instance off a new Cinder volume, leaves the flavor's disk unused, and outlives the instance. That volume is **not** `/data`.
+
+Your key pair is propagated to every compute node the head creates, which is how you SSH to them later. Compute node flavors are chosen separately, with `cluster up`.
+
+The head boots and installs itself. **It creates nothing else**. That is deliberate. Those choices are made on the head with the commands below, where you can see what is actually available and get errors immediately, instead of guessing at launch and then reading cloud-init logs to find out what went wrong.
 
 ### 3. Build the cluster from the head
 
+Wait for the instance to boot, associate a floating IP, then:
+
 ```bash
-ssh ubuntu@<head-floating-ip>
-cloud-init status --wait                    # head finished installing
+ssh ubuntu@<head-floating-ip>               # If the connection refuses, wait
+cloud-init status --wait                    # head finished installing (may take some time)
 
 cluster flavors                             # memory each flavor leaves for jobs
 cluster volume list                         # what volumes already exist?
@@ -80,16 +101,16 @@ Attach the volume before `cluster up`, so `/data` is exported by the time comput
 
 Installed on the head as `/usr/local/bin/cluster`. Every command reads its credential from `/etc/cluster/cluster.env`, written from your `head.yaml` at launch.
 
-| Command | Needs sudo | What it does |
-|---|---|---|
-| `cluster flavors` | no | Flavors and the memory each leaves for jobs |
-| `cluster volume list` | no | Volumes in the project, and which are attachable |
-| `cluster volume create` | **yes** | Create a new Cinder volume |
-| `cluster volume attach` | **yes** | Attach a volume, set it up as `/data`, export it |
-| `cluster up` | **yes** | Create or scale compute nodes, then wire up SLURM |
-| `cluster status` | **yes** | Instances plus `sinfo` |
-| `cluster down` | **yes** | Delete this cluster's compute nodes |
-| `cluster facts` | no | Print discovered facts as shell vars (used by `head-setup.sh`) |
+| Command                 | Needs sudo | What it does                                                   |
+| ----------------------- | ---------- | -------------------------------------------------------------- |
+| `cluster flavors`       | no         | Flavors and the memory each leaves for jobs                    |
+| `cluster volume list`   | no         | Volumes in the project, and which are attachable               |
+| `cluster volume create` | **yes**    | Create a new Cinder volume                                     |
+| `cluster volume attach` | **yes**    | Attach a volume, set it up as `/data`, export it               |
+| `cluster up`            | **yes**    | Create or scale compute nodes, then wire up SLURM              |
+| `cluster status`        | **yes**    | Instances plus `sinfo`                                         |
+| `cluster down`          | **yes**    | Delete this cluster's compute nodes                            |
+| `cluster facts`         | no         | Print discovered facts as shell vars (used by `head-setup.sh`) |
 
 `sudo` is needed by anything that reads `CLUSTER_NAME` from `cluster.env`, which is root-only because it holds the application credential, plus anything that writes system state. `flavors` and `volume list` only talk to the API, so they run as `ubuntu`.
 
@@ -126,10 +147,10 @@ Only `available` volumes can be attached. An `in-use` one must be detached from 
 
 ### `cluster volume create`
 
-| Argument | Required | Default | Meaning |
-|---|---|---|---|
-| `--size GB` | **yes** | — | Volume size in gigabytes |
-| `--name NAME` | no | `<CLUSTER_NAME>-data` | Volume name |
+| Argument      | Required | Default               | Meaning                  |
+| ------------- | -------- | --------------------- | ------------------------ |
+| `--size GB`   | **yes**  | —                     | Volume size in gigabytes |
+| `--name NAME` | no       | `<CLUSTER_NAME>-data` | Volume name              |
 
 Creates the volume and waits for it to become `available`. Refuses if the name already exists, rather than making a second volume with a confusingly identical name. It does not attach it.
 
@@ -140,30 +161,30 @@ sudo cluster volume create --size 500 --name 2025-archive
 
 ### `cluster volume attach`
 
-| Argument | Required | Default | Meaning |
-|---|---|---|---|
-| `NAME` | **yes** | — | Volume to attach (positional) |
-| `--force-format` | no | off | Erase an existing non-xfs filesystem. **Destroys data.** |
+| Argument         | Required | Default | Meaning                                                  |
+| ---------------- | -------- | ------- | -------------------------------------------------------- |
+| `NAME`           | **yes**  | —       | Volume to attach (positional)                            |
+| `--force-format` | no       | off     | Erase an existing non-xfs filesystem. **Destroys data.** |
 
 Attaches the volume to the head, then makes it `/data`: formats if needed, mounts, creates `work/`, `apptainer-cache/`, `tmp/` and `.nextflow/`, writes `/etc/profile.d/cluster-tmp.sh`, and exports it over NFS to every CIDR the subnet can hand out.
 
 **It never reformats a volume that holds data:**
 
-| Volume contains | Default | With `--force-format` |
-|---|---|---|
-| xfs | mounted as-is | — |
-| nothing | `mkfs.xfs` | — |
-| ext4 / LVM / LUKS / anything else | **refuses** | wiped and reformatted |
+| Volume contains                   | Default       | With `--force-format` |
+| --------------------------------- | ------------- | --------------------- |
+| xfs                               | mounted as-is | —                     |
+| nothing                           | `mkfs.xfs`    | —                     |
+| ext4 / LVM / LUKS / anything else | **refuses**   | wiped and reformatted |
 
 It finds the device by watching for the one that appears after the attach, so a second volume landing on `/dev/vdc` works, and it mounts by filesystem UUID so a device rename across reboots cannot mount the wrong disk.
 
 ### `cluster up`
 
-| Argument | Required | Default | Meaning |
-|---|---|---|---|
-| `--nodes N` | **yes** | — | Total compute nodes wanted, not how many to add |
-| `--flavor NAME` | **yes** | — | Flavor for compute nodes (see `cluster flavors`) |
-| `--mem-spec-limit MB` | no | 10% of `RealMemory`, min 2048 | Memory reserved per node for the system |
+| Argument              | Required | Default                       | Meaning                                          |
+| --------------------- | -------- | ----------------------------- | ------------------------------------------------ |
+| `--nodes N`           | **yes**  | —                             | Total compute nodes wanted, not how many to add  |
+| `--flavor NAME`       | **yes**  | —                             | Flavor for compute nodes (see `cluster flavors`) |
+| `--mem-spec-limit MB` | no       | 10% of `RealMemory`, min 2048 | Memory reserved per node for the system          |
 
 Creates compute nodes to match the head's own image, network and security groups, waits for them, measures one, then writes `slurm.conf` and `/etc/hosts` and starts the cluster.
 
@@ -183,9 +204,9 @@ No arguments. Prints the head's own placement, the compute nodes with status/IP/
 
 ### `cluster down`
 
-| Argument | Required | Default | Meaning |
-|---|---|---|---|
-| `--yes` | no | off | Skip the confirmation prompt |
+| Argument | Required | Default | Meaning                      |
+| -------- | -------- | ------- | ---------------------------- |
+| `--yes`  | no       | off     | Skip the confirmation prompt |
 
 Deletes only instances tagged `cluster=<CLUSTER_NAME>` **and** `role=compute`, so it can never touch the head or anything it did not create. Lists what it is about to delete and asks you to type the cluster name. `--yes` skips the prompt for scripts.
 

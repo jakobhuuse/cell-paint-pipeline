@@ -221,6 +221,66 @@ def operator_pubkeys():
     return keys
 
 
+def api_retry(fn, *a, tries=5, delay=10, **kw):
+    """Call an API function, retrying transient server-side failures.
+
+    This cloud's Nova has been seen returning 500 mid-poll with
+    oslo_db.exception.DBConnectionError, which is the control plane having a bad
+    moment, not anything wrong with the request. Building a cluster makes API
+    calls for ~15 minutes, so meeting one is likely, and a traceback there
+    strands the instances it already created.
+    """
+    last = None
+    for attempt in range(tries):
+        try:
+            return fn(*a, **kw)
+        except Exception as e:  # noqa: BLE001 - re-raised below unless transient
+            last = e
+            if isinstance(e, openstack.exceptions.HttpException):
+                # 5xx is the control plane failing. 4xx is us: a bad request, a
+                # missing resource, a credential without the role. Retrying that
+                # just delays the real error by 40 seconds.
+                transient = e.status_code is None or e.status_code >= 500
+            elif isinstance(e, openstack.exceptions.SDKException):
+                transient = True  # connection/timeout failures below HTTP
+            else:
+                raise  # not an API problem at all, do not mask it
+            if not transient:
+                raise
+            if attempt < tries - 1:
+                print(
+                    f"warning: API call failed ({type(e).__name__}), "
+                    f"retrying in {delay}s",
+                    file=sys.stderr,
+                )
+                time.sleep(delay)
+    raise last
+
+
+def wait_gone(conn, srv, timeout=300):
+    """Poll until a deleted server actually disappears, so its name and index
+    are free before we recreate it."""
+    end = time.time() + timeout
+    while time.time() < end:
+        if api_retry(conn.compute.find_server, srv.id, ignore_missing=True) is None:
+            return
+        time.sleep(5)
+    die(f"{srv.name} did not finish deleting within {timeout}s")
+
+
+def wait_active(conn, srv, timeout=900):
+    """Poll a server to ACTIVE, tolerating transient API failures."""
+    end = time.time() + timeout
+    while time.time() < end:
+        s = api_retry(conn.compute.get_server, srv.id)
+        if s.status == "ACTIVE":
+            return s
+        if s.status == "ERROR":
+            die(f"{srv.name} went to ERROR. Check it in Horizon, then re-run.")
+        time.sleep(5)
+    die(f"{srv.name} was still {s.status} after {timeout}s. Re-run `cluster up`.")
+
+
 def ssh(ip, cmd, timeout=30):
     return subprocess.run(
         ["ssh", "-i", str(HEAD_KEY), *SSH_OPTS, f"ubuntu@{ip}", cmd],
@@ -330,7 +390,7 @@ def existing_nodes(conn, cluster_name):
     Nothing else is ever touched: `down` can only delete what `up` tagged.
     """
     out = []
-    for s in conn.compute.servers(details=True):
+    for s in api_retry(lambda: list(conn.compute.servers(details=True))):
         meta = s.metadata or {}
         if meta.get("cluster") == cluster_name and meta.get("role") == "compute":
             out.append(s)
@@ -430,6 +490,19 @@ def cmd_up(args):
     )
 
     have = existing_nodes(conn, cluster_name)
+
+    # An instance in ERROR never booted: it holds nothing, has no fixed IP, and
+    # will never get one. Replace it rather than let it block the build forever.
+    broken = [s for s in have if s.status == "ERROR"]
+    for s in broken:
+        full = api_retry(conn.compute.get_server, s.id)
+        reason = attr(full.fault, "message") or "no reason reported"
+        info(f"{s.name} is in ERROR ({reason}); deleting it to rebuild")
+        api_retry(conn.compute.delete_server, s.id)
+    for s in broken:
+        wait_gone(conn, s)
+    have = [s for s in have if s.status != "ERROR"]
+
     # Fill gaps by index rather than counting. If compute-2 was deleted by hand,
     # counting would try to create compute-3 and collide with the live one.
     taken = {node_index(s.name) for s in have}
@@ -456,12 +529,12 @@ def cmd_up(args):
     if created:
         info(f"waiting for {len(created)} instances to become ACTIVE")
         for srv in created:
-            conn.compute.wait_for_server(srv, status="ACTIVE", wait=600)
+            wait_active(conn, srv)
 
     nodes = existing_nodes(conn, cluster_name)
     entries = []
     for s in nodes:
-        ip = server_ip(conn.compute.get_server(s.id), facts["network"])
+        ip = server_ip(api_retry(conn.compute.get_server, s.id), facts["network"])
         if not ip:
             die(f"{s.name} has no fixed IP")
         entries.append((s.name, ip))
@@ -536,7 +609,7 @@ def cmd_up(args):
         )
 
     info("done. Current state:")
-    subprocess.run(["sinfo"], check=False)
+    show_sinfo()
 
 
 def cmd_down(args):
@@ -564,6 +637,20 @@ def cmd_down(args):
         info(f"deleting {n.name}")
         conn.compute.delete_server(n.id)
     info("delete requested for all compute nodes")
+
+
+def show_sinfo():
+    """Print sinfo.
+
+    Without slurm.conf, sinfo falls back to configless discovery and emits four
+    lines about a DNS SRV lookup, which reads like a fault but only means the
+    cluster has not been built yet.
+    """
+    if not SLURM_CONF.exists():
+        print("SLURM is not configured yet: no compute nodes have been wired up.")
+        print("Run `sudo cluster up --nodes N --flavor FLAVOR`.")
+        return
+    subprocess.run(["sinfo"], check=False)
 
 
 def cmd_flavors(args):
@@ -800,7 +887,7 @@ def cmd_status(args):
             fl = attr(full.flavor, "original_name") or attr(full.flavor, "name") or "?"
             print(f"{n.name:<24} {n.status:<10} {ip:<16} {fl}")
     print()
-    subprocess.run(["sinfo"], check=False)
+    show_sinfo()
 
 
 def main():
@@ -872,7 +959,20 @@ def main():
     args = p.parse_args()
     if getattr(args, "needs_root", False) and os.geteuid() != 0:
         die("must run as root (use sudo)")
-    args.func(args)
+    try:
+        args.func(args)
+    except openstack.exceptions.SDKException as e:
+        # A traceback here is noise: the useful thing to say is that `up` is
+        # additive, so whatever it already created is kept and re-running
+        # resumes rather than duplicating.
+        die(
+            f"OpenStack API error: {e}\n"
+            f"       If this looks like a server-side hiccup (500, "
+            f"DBConnectionError), just re-run.\n"
+            f"       `cluster up` keeps what it already created and continues."
+        )
+    except KeyboardInterrupt:
+        die("interrupted. Re-run `cluster up` to resume.")
 
 
 if __name__ == "__main__":
