@@ -145,6 +145,27 @@ old-results                  500  in-use      cp-head:/dev/vdb
 
 Only `available` volumes can be attached. An `in-use` one must be detached from its current server first.
 
+### `cluster volume detach`
+
+| Argument | Required | Default | Meaning |
+|---|---|---|---|
+| `NAME` | **yes** | — | Volume to detach (positional) |
+| `--yes` | no | off | Skip the confirmation prompt |
+| `--force` | no | off | Detach even while SLURM jobs are running |
+
+Unexports `/data`, unmounts it, drops its `fstab` entry, and detaches the volume, leaving it `available`. Use it to swap `/data` onto a different volume:
+
+```bash
+sudo cluster volume detach cp-data
+sudo cluster volume attach cp-data-2
+```
+
+Order matters and the command handles it: `nfsd` holds a reference to the filesystem, so unmounting before unexporting fails with "target is busy". If the unmount still fails it reports what is holding `/data` rather than doing a lazy unmount, which would hide the problem instead of fixing it.
+
+It refuses while SLURM jobs are running, since every one of them can be using `/data`. It also removes the `fstab` line, without which the next boot blocks trying to mount a volume that is no longer there. Compute nodes are told to remount afterwards, because their NFS handle goes stale the moment `/data` changes underneath them.
+
+To grow storage you do not need any of this. Extend the volume in place instead: `openstack volume set --size <bigger> cp-data && sudo xfs_growfs /data`.
+
 ### `cluster volume create`
 
 | Argument      | Required | Default               | Meaning                  |

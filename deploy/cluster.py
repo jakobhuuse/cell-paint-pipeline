@@ -704,8 +704,23 @@ def write_exports(facts):
     info(f"exporting /data to {', '.join(facts['cidrs'])}")
 
 
+def data_device():
+    """The device currently backing /data, or None if nothing is mounted there."""
+    r = run(["findmnt", "-n", "-o", "SOURCE", "--mountpoint", "/data"])
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
 def setup_data(dev, facts, force_format):
     """Make `dev` into /data: format if safe, mount, export."""
+    current = data_device()
+    if current and current != dev:
+        die(
+            f"/data is already mounted from {current}, so {dev} cannot become /data.\n"
+            f"       This command manages the single shared /data volume.\n"
+            f"       To grow storage, extend the existing volume instead:\n"
+            f"         openstack volume set --size <bigger> <name> && sudo xfs_growfs /data\n"
+            f"       To genuinely replace it, unmount and detach {current} first."
+        )
     fs = blkid(dev, "TYPE")
     if fs == "xfs":
         info(f"{dev} already holds xfs, keeping it")
@@ -789,6 +804,99 @@ def cmd_volume_list(args):
     print("Attach one as the shared /data with: sudo cluster volume attach NAME")
 
 
+def running_jobs():
+    """How many SLURM jobs are live, or 0 if SLURM is not up yet."""
+    if not SLURM_CONF.exists():
+        return 0
+    r = run(["squeue", "-h", "-o", "%i"])
+    if r.returncode != 0:
+        return 0
+    return len([ln for ln in r.stdout.splitlines() if ln.strip()])
+
+
+def refresh_data_mounts(conn, facts, cluster_name):
+    """Make compute nodes pick up a changed /data."""
+    nodes = [s for s in existing_nodes(conn, cluster_name) if s.status == "ACTIVE"]
+    if not nodes:
+        return
+    info(f"refreshing /data on {len(nodes)} compute nodes")
+    for s in nodes:
+        ip = server_ip(api_retry(conn.compute.get_server, s.id), facts["network"])
+        if ip:
+            ssh(ip, "sudo umount -l /data 2>/dev/null; "
+                    "sudo systemctl restart data.automount 2>/dev/null; true", timeout=30)
+
+
+def cmd_volume_detach(args):
+    env = load_env()
+    conn = connect()
+    facts = discover(conn)
+    cluster_name = env.get("CLUSTER_NAME", "cp")
+
+    vol = conn.block_storage.find_volume(args.name, ignore_missing=True)
+    if vol is None:
+        die(f"no volume named {args.name!r}. `cluster volume list` shows what exists.")
+    mine = [a for a in (vol.attachments or []) if a.get("server_id") == facts["id"]]
+    if not mine:
+        die(f"{args.name!r} is not attached to this head, so there is nothing to detach.")
+
+    live = running_jobs()
+    if live and not args.force:
+        die(
+            f"{live} SLURM job(s) are still running, and every one of them can be "
+            f"using /data.\n"
+            f"       Pulling the volume out will fail them. Wait for them to finish, "
+            f"or `scancel` them.\n"
+            f"       Pass --force to detach anyway."
+        )
+
+    current = data_device()
+    if not args.yes:
+        print(f"About to unexport, unmount and detach {args.name} ({vol.size} GB).")
+        print("Every compute node loses /data until you attach another volume.")
+        if input(f"Type the volume name ({args.name}) to confirm: ").strip() != args.name:
+            die("confirmation did not match, nothing done")
+
+    # Unexport first. nfsd holds a reference to the filesystem, so umount would
+    # fail with "target is busy" while the export is still live.
+    exports = Path("/etc/exports")
+    if exports.exists() and exports.read_text().strip():
+        info("unexporting /data")
+        exports.write_text("")
+        run(["exportfs", "-ra"])
+
+    if current:
+        info(f"unmounting /data ({current})")
+        r = run(["umount", "/data"])
+        if r.returncode != 0:
+            holders = run(["lsof", "+D", "/data"]).stdout.strip()
+            die(
+                f"umount /data failed: {r.stderr.strip()}\n"
+                f"       Something is still using it. A lazy unmount would hide that "
+                f"rather than fix it:\n{holders[:600] or '       (lsof reported nothing)'}"
+            )
+
+    # Drop the fstab entry, or the next boot blocks trying to mount a volume
+    # that is no longer attached.
+    fstab = Path("/etc/fstab")
+    kept = [ln for ln in fstab.read_text().splitlines() if " /data " not in ln]
+    fstab.write_text("\n".join([*kept, ""]))
+
+    info(f"detaching {args.name}")
+    api_retry(conn.compute.delete_volume_attachment, vol.id, facts["id"])
+    end = time.time() + 300
+    while time.time() < end:
+        v = api_retry(conn.block_storage.get_volume, vol.id)
+        if v.status == "available":
+            break
+        time.sleep(5)
+    else:
+        die(f"{args.name} did not reach 'available' within 300s. Check Horizon.")
+
+    refresh_data_mounts(conn, facts, cluster_name)
+    info(f"{args.name} detached. Attach another with: sudo cluster volume attach NAME")
+
+
 def cmd_volume_create(args):
     env = load_env()
     conn = connect()
@@ -813,7 +921,7 @@ def cmd_volume_attach(args):
     if vol is None:
         die(f"no volume named {args.name!r}. `cluster volume list` shows what exists.")
 
-    # Already ours: redo the /data setup without touching the attachment. This is
+    # Redo the /data setup without touching the attachment. This is
     # what makes the command a repair tool as well as a setup one, e.g. to fix an
     # NFS export after the network changed. Without it, re-running would refuse
     # because the volume is 'in-use', leaving no way to re-export at all.
@@ -824,6 +932,7 @@ def cmd_volume_attach(args):
             die(f"{args.name!r} is attached here but reports no device. Check `lsblk`.")
         info(f"{args.name} is already attached at {dev}, re-running /data setup")
         setup_data(dev, facts, args.force_format)
+        refresh_data_mounts(conn, facts, load_env().get("CLUSTER_NAME", "cp"))
         info("done. /data is mounted and exported.")
         return
 
@@ -831,6 +940,20 @@ def cmd_volume_attach(args):
         die(
             f"volume {args.name!r} is {vol.status} and attached elsewhere. "
             f"Detach it from its current server first."
+        )
+
+    # Refuse before attaching rather than after, so a rejected request does not
+    # leave a volume dangling off the head with no filesystem set up.
+    current = data_device()
+    if current:
+        die(
+            f"/data is already mounted from {current}, so {args.name!r} cannot "
+            f"become /data.\n"
+            f"       There is only one shared /data. To grow it, extend the volume "
+            f"you already have:\n"
+            f"         openstack volume set --size <bigger> <name>\n"
+            f"         sudo xfs_growfs /data\n"
+            f"       To replace it, unmount and detach the current volume first."
         )
 
     before = block_devices()
@@ -851,6 +974,7 @@ def cmd_volume_attach(args):
         )
     info(f"appeared as {dev}")
     setup_data(dev, facts, args.force_format)
+    refresh_data_mounts(conn, facts, load_env().get("CLUSTER_NAME", "cp"))
     info("done. /data is mounted and exported.")
 
 
@@ -952,6 +1076,17 @@ def main():
         help="erase an existing non-xfs filesystem. Destroys data.",
     )
     va.set_defaults(func=cmd_volume_attach, needs_root=True)
+
+    vd = volsub.add_parser(
+        "detach",
+        help="unexport, unmount and detach the /data volume, so another can take its place",
+    )
+    vd.add_argument("name")
+    vd.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    vd.add_argument(
+        "--force", action="store_true", help="detach even while SLURM jobs are running"
+    )
+    vd.set_defaults(func=cmd_volume_detach, needs_root=True)
 
     fa = sub.add_parser("facts", help="print discovered cluster facts as shell vars")
     fa.set_defaults(func=cmd_facts)
