@@ -768,14 +768,9 @@ def setup_data(dev, facts, force_format):
     for d in ("work", "apptainer-cache", "tmp", ".nextflow"):
         (Path("/data") / d).mkdir(exist_ok=True)
         run(["chown", "ubuntu:ubuntu", str(Path("/data") / d)])
-    # Keep big scratch and Nextflow assets off the small root disk.
-    Path("/etc/profile.d/cluster-tmp.sh").write_text(
-        "export TMPDIR=/data/tmp\n"
-        "export APPTAINER_TMPDIR=/data/tmp\n"
-        "export APPTAINER_CACHEDIR=/data/apptainer-cache\n"
-        "export NXF_HOME=/data/.nextflow\n"
-        'export NXF_OPTS="-Djava.io.tmpdir=/data/tmp"\n'
-    )
+    # /etc/profile.d/cluster-tmp.sh is written by head-setup.sh at boot, not
+    # here: profile.d is only read by login shells, and this command necessarily
+    # runs after you have already logged in.
 
     write_exports(facts)
 

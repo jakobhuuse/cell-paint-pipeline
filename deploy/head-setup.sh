@@ -101,6 +101,16 @@ echo "head=${CLUSTER_HEAD_NAME} ip=${CLUSTER_HEAD_IP} net=${CLUSTER_NETWORK} cid
 # The mountpoint always exists so paths resolve; `cluster volume attach` fills it.
 install -d -m 0755 /data
 
+# --- Point Nextflow and Apptainer at /data ---
+cat > /etc/profile.d/cluster-tmp.sh <<'PROFILE'
+export TMPDIR=/data/tmp
+export APPTAINER_TMPDIR=/data/tmp
+export APPTAINER_CACHEDIR=/data/apptainer-cache
+export NXF_HOME=/data/.nextflow
+export NXF_OPTS="-Djava.io.tmpdir=/data/tmp"
+PROFILE
+chmod 0644 /etc/profile.d/cluster-tmp.sh
+
 # --- Nextflow (needs Java; the pipeline manifest requires >=26.04.0) ---
 if [ ! -x /usr/local/bin/nextflow ]; then
   ( curl -s https://get.nextflow.io | bash \
