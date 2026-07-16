@@ -1,3 +1,7 @@
+def flag(value) {
+    value.toString().toBoolean()
+}
+
 // Sorted CellProfiler input images for a plate (thumbnails excluded).
 def plateTifs(dir) {
     files("${dir}/**/*.tif").findAll { tif -> !tif.name.toLowerCase().contains('_thumb') }.sort()

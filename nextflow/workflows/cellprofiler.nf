@@ -1,5 +1,5 @@
 include { CELLPROFILER_QC; CELLPROFILER_ILLUM; CELLPROFILER_ANALYSIS } from '../modules/cellprofiler.nf'
-include { plateImages; loadDataChunks; platemap } from '../utils.nf'
+include { plateImages; loadDataChunks; platemap; flag } from '../utils.nf'
 include { CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_BASE; CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_ILLUM; CYTOPIPE_CELLPROFILER_PARQUET; CYTOPIPE_AGGREGATE; CYTOPIPE_CONCAT; CYTOPIPE_REPORT_CELLPROFILER } from '../modules/cytopipe.nf'
 include { PYCYTOMINER_ANNOTATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_FEATURE_SELECT; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
@@ -39,7 +39,7 @@ workflow CELLPROFILER {
     consensus_profiles  = channel.empty()
     report_figures      = channel.empty()
 
-    if( params.profiling ) {
+    if( flag(params.profiling) ) {
         features = 'infer'
         aggregated = CYTOPIPE_AGGREGATE(single_cell.cellprofiler_parquet, features, params.pycytominer_aggregate_strata_cp)
         annotated  = PYCYTOMINER_ANNOTATE(aggregated.aggregated, platemap())

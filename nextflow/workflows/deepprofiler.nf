@@ -1,5 +1,5 @@
 include { CELLPROFILER_NUCLEI } from '../modules/cellprofiler.nf'
-include { plateImages; platemap; deepprofilerFeatures; loadDataChunks } from '../utils.nf'
+include { plateImages; platemap; deepprofilerFeatures; loadDataChunks; flag } from '../utils.nf'
 include { CYTOPIPE_LOADDATA; CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_AGGREGATE; CYTOPIPE_CONCAT; CYTOPIPE_REPORT_DEEPPROFILER } from '../modules/cytopipe.nf'
 include { DEEPPROFILER_PREPARE; DEEPPROFILE } from '../modules/deepprofiler.nf'
 include { PYCYTOMINER_NORMALIZE; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
@@ -48,7 +48,7 @@ workflow DEEPPROFILER {
     consensus_profiles  = channel.empty()
     report_figures      = channel.empty()
 
-    if( params.profiling ) {
+    if( flag(params.profiling) ) {
         features = deepprofilerFeatures()
 
         aggregated = CYTOPIPE_AGGREGATE(single_cell.deepprofiler_parquet, features, params.pycytominer_aggregate_strata_dp)
