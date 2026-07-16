@@ -49,7 +49,12 @@ done
 unset _v
 
 write_clouds() {  # <path> <owner>
-  install -d -m 0700 -o "$2" -g "$2" "$(dirname "$1")"
+  # Create ~/.config explicitly.
+  local dir parent
+  dir=$(dirname "$1")
+  parent=$(dirname "$dir")
+  install -d -m 0755 -o "$2" -g "$2" "$parent"
+  install -d -m 0700 -o "$2" -g "$2" "$dir"
   cat > "$1" <<CLOUDS
 clouds:
   openstack:

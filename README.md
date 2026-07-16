@@ -40,9 +40,10 @@ outputs are namespaced under `<pipeline>/` so they never collide.
 - **`cytopipe`** is the data-management/glue layer. It lives in its own repo ([jakobhuuse/cytopipe](https://github.com/jakobhuuse/cytopipe))
   and is consumed here purely as a container image (`--cytopipe_image`). Its CLI exposes
   `cytopipe loaddata` (build CellProfiler LoadData CSVs + chunking), `cytopipe convert`
-  (image-tool output → single-cell parquet), and `cytopipe bridge`
-  (CellProfiler → DeepProfiler metadata handoff). CellProfiler, DeepProfiler, and pycytominer run
-  via their own images' native entrypoints.
+  (image-tool output → single-cell parquet), `cytopipe bridge`
+  (CellProfiler → DeepProfiler metadata handoff), and `cytopipe aggregate` (well-level median
+  profiles, a memory-bounded DuckDB replacement for `pycytominer aggregate`). CellProfiler,
+  DeepProfiler, and the remaining pycytominer steps run via their own images' native entrypoints.
 
 ## Installation
 
@@ -105,6 +106,7 @@ command line with `--<name> <value>` (or in a `-params-file`).
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `--pipeline` | `deepprofiler` | Which branch to run: `deepprofiler` or `cellprofiler`. |
+| `--profiling` | `true` | Run the profiling tail (aggregate, normalize, feature selection/consensus, report). Set `false` for tiny fixtures, where the cohort statistics are undefined and the run would abort; it then stops at single-cell parquet. |
 | `--input_dir` | `${projectDir}/tests/data` | Root of the raw images, and must also contain `platemap.csv`. |
 | `--plate_glob` | `*/*` | Glob (relative to `input_dir`) selecting per-plate image directories. |
 | `--outdir` | `results` | Where published outputs and run reports land. |
@@ -127,7 +129,7 @@ command line with `--<name> <value>` (or in a `-params-file`).
 | `--deepprofiler_image` | `ghcr.io/jakobhuuse/deepprofiler:0.5.1` | DeepProfiler container image. |
 | `--deepprofiler_model` | `conf/deepprofiler/model.hdf5` | Trained model checkpoint. |
 | `--deepprofiler_config` | `conf/deepprofiler/config.json` | DeepProfiler configuration. |
-| `--deepprofiler_embedding_dim` | `672` | Embedding length, which sets the `efficientnet_1..N` feature names passed to pycytominer. |
+| `--deepprofiler_embedding_dim` | `672` | Embedding length, which sets the `efficientnet_1..N` feature names passed to the aggregation and pycytominer steps. |
 
 ### cytopipe
 
@@ -140,8 +142,8 @@ command line with `--<name> <value>` (or in a `-params-file`).
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `--pycytominer_image` | `cytomining/pycytominer:1.5.1_260603` | pycytominer container image. |
-| `--pycytominer_aggregate_strata_dp` | `Metadata_Plate,Metadata_Well,Metadata_Compound` | Grouping columns for well-level aggregation (DeepProfiler branch). |
-| `--pycytominer_aggregate_strata_cp` | `Metadata_Plate,Metadata_Well` | Grouping columns for well-level aggregation (CellProfiler branch). |
+| `--pycytominer_aggregate_strata_dp` | `Metadata_Plate,Metadata_Well,Metadata_Compound` | Grouping columns for well-level median aggregation, now run by `cytopipe aggregate` (DeepProfiler branch). |
+| `--pycytominer_aggregate_strata_cp` | `Metadata_Plate,Metadata_Well` | Grouping columns for well-level median aggregation, now run by `cytopipe aggregate` (CellProfiler branch). |
 | `--pycytominer_annotate_join_on` | `Metadata_DestinationWell,Metadata_Well` | Columns to join the platemap (first) onto the profiles (second) during annotation (CellProfiler branch). |
 | `--pycytominer_normalize_samples` | `Metadata_Compound == 'DMSO'` | Query selecting the control samples normalization is fit against. |
 | `--pycytominer_feature_select_ops` | `variance_threshold,correlation_threshold,blocklist` | Feature-selection operations (CellProfiler branch). |
@@ -165,6 +167,9 @@ collide:
 - `<pipeline>/`: feature-selected (CellProfiler only), consensus profiles, and report figures.
 - `nextflow/<timestamp>/`: Nextflow `trace.txt`, `report.html`, and `timeline.html`.
 
+With `--profiling false`, only the QC reports and single-cell `raw/` profiles are produced; the
+aggregation, normalization, cohort, and report outputs are skipped.
+
 ## Testing
 
 [nf-test](https://www.nf-test.com) unit tests live in [tests/](tests/) and cover the Groovy helpers
@@ -178,11 +183,13 @@ curl -fsSL https://code.askimed.com/install/nf-test | bash   # once, installs ./
 
 There are no automated end-to-end tests. To exercise the full stack, run each branch locally
 against the bundled `tests/data` dataset (this pulls every image, and the DeepProfiler branch wants
-a GPU):
+a GPU). The fixture has too few wells for the cohort profiling steps (correlation-based feature
+selection and consensus are undefined on a handful of samples), so disable the profiling tail with
+`--profiling false`; the run then stops at single-cell parquet:
 
 ```bash
-nextflow run . -profile standard --pipeline cellprofiler
-nextflow run . -profile gpu      --pipeline deepprofiler
+nextflow run . -profile standard --pipeline cellprofiler --profiling false
+nextflow run . -profile gpu      --pipeline deepprofiler --profiling false
 ```
 
 You can also validate config and syntax without running anything (the CI `lint` job):

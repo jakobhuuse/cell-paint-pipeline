@@ -1,28 +1,7 @@
-// The five core pycytominer functions as processes, used top to bottom.
+// The core pycytominer functions as processes, used top to bottom. Aggregation is done by
+// CYTOPIPE_AGGREGATE instead (streaming DuckDB median), because pycytominer aggregate loads
+// the whole single-cell table into memory, eventually leading to an OOM-kill.
 // DeepProfiler skips annotation and feature selection.
-
-process PYCYTOMINER_AGGREGATE {
-    tag { plate_id }
-    label 'pycytominer'
-
-    input:
-    tuple val(plate_id), path(profiles)
-    val features
-    val strata
-
-    output:
-    tuple val(plate_id), path("${plate_id}.aggregated.parquet"), emit: aggregated
-
-    script:
-    """
-    pycytominer aggregate \\
-        --profiles "${profiles}" \\
-        --output_file "${plate_id}.aggregated.parquet" \\
-        --strata "${strata}" \\
-        --features "${features}" \\
-        --output_type parquet
-    """
-}
 
 process PYCYTOMINER_ANNOTATE {
     tag { plate_id }
