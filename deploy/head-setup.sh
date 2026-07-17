@@ -87,14 +87,38 @@ systemctl enable --now chrony
 systemctl enable munge
 systemctl restart munge
 
-# --- the head's own SSH key. Compute nodes get this public key injected at
-#     create time, which is what lets the head configure them afterwards. A node
-#     launched without any key is unreachable forever, console included. ---
+# --- the head's own SSH key. Compute nodes get this public key injected at create time ---
 install -d -m 0700 /etc/cluster
 if [ ! -f "$HEAD_KEY" ]; then
   ssh-keygen -t ed25519 -N '' -C "cluster-head" -f "$HEAD_KEY" >/dev/null
 fi
 chmod 0600 "$HEAD_KEY"
+
+# --- operator access to compute nodes. ---
+install -d -m 0700 -o ubuntu -g ubuntu /home/ubuntu/.ssh
+install -m 0600 -o ubuntu -g ubuntu "$HEAD_KEY" /home/ubuntu/.ssh/id_cluster
+install -d -m 0755 /etc/ssh/ssh_config.d
+cat > /etc/ssh/ssh_config.d/10-cluster.conf <<SSHCFG
+# Written by head-setup.sh. Do not edit; re-running the script overwrites it.
+#
+# Host keys are not checked because compute nodes are cattle: \`cluster up\` and
+# \`cluster down\` recycle names and addresses freely, so a remembered key would
+# be stale more often than not and would refuse the login rather than warn.
+Host ${CLUSTER_NAME:-cp}-compute-*
+    User ubuntu
+    IdentityFile /home/ubuntu/.ssh/id_cluster
+    IdentitiesOnly yes
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+SSHCFG
+chmod 0644 /etc/ssh/ssh_config.d/10-cluster.conf
+# Ubuntu's stock ssh_config Includes this directory. If that line is ever missing
+# the block above is silently dead, which is worth a word now rather than a
+# confusing permission denied later.
+grep -qs '^Include /etc/ssh/ssh_config.d/\*.conf' /etc/ssh/ssh_config \
+  || echo "WARNING: /etc/ssh/ssh_config has no Include for ssh_config.d;" \
+          "reach nodes with: sudo ssh -i $HEAD_KEY ubuntu@<node>" >&2
 
 install -d -o slurm -g slurm /var/spool/slurmctld /var/spool/slurmd /var/log/slurm
 

@@ -206,6 +206,24 @@ def head_pubkey():
     return pub.read_text().strip()
 
 
+AUTH_KEY_RE = re.compile(
+    r"(?:^|\s)"
+    r"(ssh-(?:rsa|dss|ed25519)"
+    r"|ecdsa-sha2-nistp(?:256|384|521)"
+    r"|sk-ssh-ed25519@openssh\.com"
+    r"|sk-ecdsa-sha2-nistp256@openssh\.com)"
+    r"\s+(AAAA[A-Za-z0-9+/]+={0,3})"
+)
+
+
+def bare_pubkey(line):
+    """
+    Reduce an authorized_keys line to "<type> <base64>", or None if it holds no key.
+    """
+    m = AUTH_KEY_RE.search(line)
+    return f"{m.group(1)} {m.group(2)}" if m else None
+
+
 def operator_pubkeys():
     """Whatever keys can already reach the head, so they also reach compute nodes."""
     keys = []
@@ -216,8 +234,11 @@ def operator_pubkeys():
         if path.exists():
             for line in path.read_text().splitlines():
                 line = line.strip()
-                if line and not line.startswith("#"):
-                    keys.append(line)
+                if not line or line.startswith("#"):
+                    continue
+                key = bare_pubkey(line)
+                if key:
+                    keys.append(key)
     return keys
 
 
