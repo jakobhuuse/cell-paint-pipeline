@@ -187,7 +187,11 @@ sudo cluster volume create --size 500 --name 2025-archive
 | `NAME`           | **yes**  | —       | Volume to attach (positional)                            |
 | `--force-format` | no       | off     | Erase an existing non-xfs filesystem. **Destroys data.** |
 
-Attaches the volume to the head, then makes it `/data`: formats if needed, mounts, creates `work/`, `apptainer-cache/`, `tmp/` and `.nextflow/`, writes `/etc/profile.d/cluster-tmp.sh`, and exports it over NFS to every CIDR the subnet can hand out.
+Attaches the volume to the head, then makes it `/data`: formats if needed, mounts, creates `work/`, `apptainer-cache/`, `tmp/` and `.nextflow/`, writes `/etc/profile.d/cluster-tmp.sh`, and exports it over NFS to this cluster's compute nodes.
+
+**The export lists nodes individually,** one `/etc/exports` line per compute node address, rather than exporting to the subnet. The subnet is not a safe stand-in for the cluster: it is shared with other projects and can be very large, so a CIDR export offers read-write `/data` to anything that can route to the head. An address only appears in the export if the instance holding it carries the metadata `cluster up` tags its own nodes with.
+
+The consequence is that the export is exactly as current as the last `cluster up`, `cluster down` or `cluster volume attach`. Those three keep it in sync, and a compute node that appears any other way cannot mount `/data` until one of them runs again.
 
 It also sizes the nfsd thread pool, in `/etc/nfs.conf.d/threads.conf`. The stock 8 threads is the usual reason `/data` feels slow once the whole cluster is on it, since every node's traffic queues behind those 8. If it warns that nfsd is running a different number than configured, `rpc.nfsd` was already up and only reads its config at startup: `sudo systemctl restart nfs-kernel-server` applies it. Compute nodes mount `hard`, so they block and retry across the restart rather than erroring.
 
@@ -221,7 +225,7 @@ It finds the device by watching for the one that appears after the attach, so a 
 | `--flavor NAME`       | **yes**  | —                             | Flavor for compute nodes (see `cluster flavors`) |
 | `--mem-spec-limit MB` | no       | 10% of `RealMemory`, min 2048 | Memory reserved per node for the system          |
 
-Creates compute nodes to match the head's own image, network and security groups, waits for them, measures one, then writes `slurm.conf` and `/etc/hosts` and starts the cluster.
+Creates compute nodes to match the head's own image, network and security groups, waits for them, measures one, then writes `slurm.conf` and `/etc/hosts` and starts the cluster. It also adds the new nodes to the `/data` export, so `up` is what grants them access to shared storage.
 
 `--nodes` is a **target**. It is idempotent and additive: with 4 nodes running, `--nodes 8` creates 4 more. It never deletes, so a lower number creates nothing. Gaps are filled by index, so if you deleted `cp-compute-2` by hand, the next run recreates that one rather than colliding with `cp-compute-3`.
 
@@ -244,6 +248,8 @@ No arguments. Prints the head's own placement, the compute nodes with status/IP/
 | `--yes`  | no       | off     | Skip the confirmation prompt |
 
 Deletes only instances tagged `cluster=<CLUSTER_NAME>` **and** `role=compute`, so it can never touch the head or anything it did not create. Lists what it is about to delete and asks you to type the cluster name. `--yes` skips the prompt for scripts.
+
+It then drops the deleted nodes from the `/data` export without waiting for the deletes to finish. Their addresses return to the pool and can be reissued to another project's instance, which would otherwise inherit read-write access to `/data`.
 
 ### `cluster facts`
 
@@ -314,7 +320,7 @@ nextflow run jakobhuuse/cell-paint-pipeline -profile slurm \
 
 - **No `/data` on the head**: nothing is attached yet. `cluster volume list`, then `sudo cluster volume attach NAME`. A `vda` larger than the flavor's disk means you booted the head from volume (**Create New Volume = Yes**); that volume is the root disk, not `/data`.
 - **`cluster volume attach` refuses: "already holds a ext4 filesystem"**: working as intended. It will not format a volume that has data on it. Mount it by hand to keep it, or pass `--force-format` to erase it.
-- **`/data` empty on compute nodes but fine on the head**: the NFS export does not cover the node's address. `sudo exportfs -v` on the head must list a subnet the node's IP falls inside. `sudo cluster volume attach NAME` re-runs the setup on an already-attached volume, which rewrites the export from the subnet the API reports.
+- **`/data` empty on compute nodes but fine on the head**: the node's address is not in the export. `sudo exportfs -v` on the head lists one line per compute node, and the node's own IP must appear verbatim. If it is missing, the export has fallen behind the cluster: `sudo cluster volume attach NAME` re-runs the setup on an already-attached volume and rewrites the export from the nodes the API reports right now. This is the expected cost of exporting to nodes rather than to the whole subnet, so check it first whenever a node cannot see `/data`.
 
 ### SLURM
 

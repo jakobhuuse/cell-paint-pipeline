@@ -185,8 +185,6 @@ def discover(conn):
     subnets = list(conn.network.subnets(network_id=network.id))
     if not subnets:
         die(f"network {net_name} has no subnet")
-    # The NFS export must cover every address a compute node can be given. The
-    # subnet is the authority on that, not an assumed /24.
     cidrs = [s.cidr for s in subnets]
 
     groups = [n for n in (attr(g, "name") for g in (server.security_groups or [])) if n]
@@ -573,6 +571,16 @@ def cmd_up(args):
     info("writing /etc/hosts")
     write_hosts_block([(facts["name"], facts["ip"]), *entries])
 
+    # Export to the new nodes before waiting on SSH
+    if data_device():
+        write_exports([ip for _, ip in entries])
+    else:
+        warn(
+            "no volume is mounted at /data, so the new nodes have nothing to "
+            "mount. Attach one with `sudo cluster volume attach NAME`, which "
+            "also exports it to them."
+        )
+
     # cloud-init on a fresh node takes a few minutes (apt + apptainer PPA).
     info("waiting for SSH on compute nodes (cloud-init installs packages first)")
     deadline = time.time() + 900
@@ -669,6 +677,13 @@ def cmd_down(args):
         conn.compute.delete_server(n.id)
     info("delete requested for all compute nodes")
 
+    # Drop them from the export now rather than after waiting for the deletes to
+    # finish. These addresses go back to the pool and can be handed to another
+    # project's instance, which would otherwise inherit rw access to /data. The
+    # nodes losing the export early costs nothing: they are being destroyed.
+    if data_device():
+        write_exports([])
+
 
 def show_sinfo():
     """Print sinfo.
@@ -723,11 +738,19 @@ def blkid(dev, field):
     return run(["blkid", "-o", "value", "-s", field, dev]).stdout.strip()
 
 
-def write_exports(facts):
-    # Export to every CIDR the subnet can hand out. Assuming a /24 is what
-    # silently locks compute nodes outside it out of /data.
+def compute_node_ips(conn, facts, cluster_name):
+    """Fixed IPs of this cluster's compute nodes, for the /data export."""
+    out = []
+    for s in existing_nodes(conn, cluster_name):
+        ip = server_ip(s, facts["network"])
+        if ip:
+            out.append(ip)
+    return out
+
+
+def write_exports(node_ips):
     Path("/etc/exports").write_text(
-        "".join(f"/data {c}(rw,async,no_subtree_check)\n" for c in facts["cidrs"])
+        "".join(f"/data {ip}(rw,async,no_subtree_check)\n" for ip in node_ips)
     )
     # Written here rather than in head-setup.sh so that re-running an attach,
     # which is the documented fix for a bad export, also re-applies this.
@@ -740,7 +763,12 @@ def write_exports(facts):
     if run(["exportfs", "-ra"]).returncode != 0:
         die("exportfs -ra failed")
     check_nfsd_threads()
-    info(f"exporting /data to {', '.join(facts['cidrs'])}")
+    if node_ips:
+        info(f"exporting /data to {len(node_ips)} compute nodes")
+    else:
+        # Silence here would look like success and then fail later as an
+        # unexplained empty /data, so say it plainly.
+        info("/data is exported to nothing: this cluster has no compute nodes yet")
 
 
 def check_nfsd_threads():
@@ -770,8 +798,8 @@ def data_device():
     return r.stdout.strip() if r.returncode == 0 else None
 
 
-def setup_data(dev, facts, force_format):
-    """Make `dev` into /data: format if safe, mount, export."""
+def setup_data(dev, force_format, node_ips):
+    """Make `dev` into /data: format if safe, mount, export to `node_ips`."""
     current = data_device()
     if current and current != dev:
         die(
@@ -832,7 +860,7 @@ def setup_data(dev, facts, force_format):
     # here: profile.d is only read by login shells, and this command necessarily
     # runs after you have already logged in.
 
-    write_exports(facts)
+    write_exports(node_ips)
 
 
 def cmd_volume_list(args):
@@ -878,8 +906,12 @@ def refresh_data_mounts(conn, facts, cluster_name):
     for s in nodes:
         ip = server_ip(api_retry(conn.compute.get_server, s.id), facts["network"])
         if ip:
-            ssh(ip, "sudo umount -l /data 2>/dev/null; "
-                    "sudo systemctl restart data.automount 2>/dev/null; true", timeout=30)
+            ssh(
+                ip,
+                "sudo umount -l /data 2>/dev/null; "
+                "sudo systemctl restart data.automount 2>/dev/null; true",
+                timeout=30,
+            )
 
 
 def cmd_volume_detach(args):
@@ -893,7 +925,9 @@ def cmd_volume_detach(args):
         die(f"no volume named {args.name!r}. `cluster volume list` shows what exists.")
     mine = [a for a in (vol.attachments or []) if a.get("server_id") == facts["id"]]
     if not mine:
-        die(f"{args.name!r} is not attached to this head, so there is nothing to detach.")
+        die(
+            f"{args.name!r} is not attached to this head, so there is nothing to detach."
+        )
 
     live = running_jobs()
     if live and not args.force:
@@ -909,7 +943,10 @@ def cmd_volume_detach(args):
     if not args.yes:
         print(f"About to unexport, unmount and detach {args.name} ({vol.size} GB).")
         print("Every compute node loses /data until you attach another volume.")
-        if input(f"Type the volume name ({args.name}) to confirm: ").strip() != args.name:
+        if (
+            input(f"Type the volume name ({args.name}) to confirm: ").strip()
+            != args.name
+        ):
             die("confirmation did not match, nothing done")
 
     # Unexport first. nfsd holds a reference to the filesystem, so umount would
@@ -972,6 +1009,7 @@ def cmd_volume_create(args):
 def cmd_volume_attach(args):
     conn = connect()
     facts = discover(conn)
+    cluster_name = load_env().get("CLUSTER_NAME", "cp")
     vol = conn.block_storage.find_volume(args.name, ignore_missing=True)
     if vol is None:
         die(f"no volume named {args.name!r}. `cluster volume list` shows what exists.")
@@ -986,8 +1024,10 @@ def cmd_volume_attach(args):
         if not dev:
             die(f"{args.name!r} is attached here but reports no device. Check `lsblk`.")
         info(f"{args.name} is already attached at {dev}, re-running /data setup")
-        setup_data(dev, facts, args.force_format)
-        refresh_data_mounts(conn, facts, load_env().get("CLUSTER_NAME", "cp"))
+        setup_data(
+            dev, args.force_format, compute_node_ips(conn, facts, cluster_name)
+        )
+        refresh_data_mounts(conn, facts, cluster_name)
         info("done. /data is mounted and exported.")
         return
 
@@ -1028,8 +1068,8 @@ def cmd_volume_attach(args):
             "volume attached via the API but no new block device appeared. Check `lsblk`."
         )
     info(f"appeared as {dev}")
-    setup_data(dev, facts, args.force_format)
-    refresh_data_mounts(conn, facts, load_env().get("CLUSTER_NAME", "cp"))
+    setup_data(dev, args.force_format, compute_node_ips(conn, facts, cluster_name))
+    refresh_data_mounts(conn, facts, cluster_name)
     info("done. /data is mounted and exported.")
 
 
