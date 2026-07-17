@@ -25,7 +25,7 @@ It stands up a small SLURM cluster: one **head** node (slurmctld, Nextflow drive
 
 ## Prerequisites
 
-- Ubuntu **24.04** cloud image, an SSH keypair, and quota for 1 head + N compute instances, one Cinder volume, one security group.
+- Ubuntu **26.04** cloud image, an SSH keypair, and quota for 1 head + N compute instances, one Cinder volume, one security group.
 - An **application credential** with a role that can create servers and volumes.
 
 ## Deploy
@@ -64,7 +64,7 @@ _Compute → Instances → Launch Instance_, then one row per tab of the wizard:
 | Tab | Set |
 |---|---|
 | Details | Name: anything, e.g. `cp-head`. The head discovers its own name. |
-| Source | Ubuntu 24.04, and **Create New Volume: No** |
+| Source | Ubuntu 26.04, and **Create New Volume: No** |
 | Flavor | Anything modest. The head runs the Nextflow driver and NFS, not jobs. |
 | Networks | Your tenant network |
 | Security Groups | `cp-cluster` |
@@ -188,6 +188,20 @@ sudo cluster volume create --size 500 --name 2025-archive
 | `--force-format` | no       | off     | Erase an existing non-xfs filesystem. **Destroys data.** |
 
 Attaches the volume to the head, then makes it `/data`: formats if needed, mounts, creates `work/`, `apptainer-cache/`, `tmp/` and `.nextflow/`, writes `/etc/profile.d/cluster-tmp.sh`, and exports it over NFS to every CIDR the subnet can hand out.
+
+It also sizes the nfsd thread pool, in `/etc/nfs.conf.d/threads.conf`. The stock 8 threads is the usual reason `/data` feels slow once the whole cluster is on it, since every node's traffic queues behind those 8. If it warns that nfsd is running a different number than configured, `rpc.nfsd` was already up and only reads its config at startup: `sudo systemctl restart nfs-kernel-server` applies it. Compute nodes mount `hard`, so they block and retry across the restart rather than erroring.
+
+**The export is `async`,** meaning `nfsd` acknowledges a write once it is in the head's page cache rather than once it is on the volume. This is a large speedup for the work directory's constant small creates, renames and unlinks, and it is safe because nothing irreplaceable is written through the export. Export options only govern how `nfsd` answers its clients, and your input images never reach `nfsd`: they are rsynced to the head and written to local XFS, and Nextflow publishes results from the driver, which also runs on the head. Everything a compute node writes over NFS is scratch (`work/`, `tmp/`, `apptainer-cache/`) and re-derivable by re-running.
+
+The tradeoff is that a head crash can lose already-acknowledged writes without the client being told. **After a head crash, re-run from scratch rather than with `-resume`**, since a resumed run can reuse a work-directory file that was silently truncated.
+
+**Tuning the thread pool.** `NFSD_THREADS` in `cluster.py` is a starting point sized for the number of clients, not a derived answer. Threads are cheap to over-provision, since idle ones are sleeping kernel threads blocked on I/O rather than burning CPU, so they do not meaningfully compete with `slurmctld` or the Nextflow driver. Under-provisioning just makes requests queue. Check it under real load:
+
+```bash
+cat /proc/fs/nfsd/pool_stats   # pool packets-arrived sockets-enqueued threads-woken threads-timedout
+```
+
+A `sockets-enqueued` that climbs during a run means requests arrived with no thread free, so raise the count. A large `threads-timedout` with `sockets-enqueued` near zero means there are more threads than the load needs, which is harmless. Ignore the `th` line in `/proc/net/rpc/nfsd`: every field after the thread count has been hardcoded to zero since kernel 2.6.29, so it looks like an idle server no matter how loaded it is.
 
 **It never reformats a volume that holds data:**
 

@@ -60,6 +60,12 @@ MEM_RESERVE_MIN_MB = 2048
 # measure, i.e. by `cluster flavors`.
 FLAVOR_MEM_EST_FRAC = 0.95
 
+# nfsd's stock 8 threads is the usual reason /data feels slow with the whole
+# cluster on it. Every node's reads and writes queue behind those 8. The right
+# number tracks how many requests the clients have in flight, NOT the head's
+# core count.
+NFSD_THREADS = 128
+
 
 def memory_plan(node_mb, reserve_override=None):
     """Turn a node's total memory into (RealMemory, MemSpecLimit, schedulable).
@@ -97,6 +103,10 @@ def die(msg):
 
 def info(msg):
     print(f"==> {msg}", flush=True)
+
+
+def warn(msg):
+    print(f"cluster: warning: {msg}", file=sys.stderr, flush=True)
 
 
 def load_env():
@@ -717,12 +727,41 @@ def write_exports(facts):
     # Export to every CIDR the subnet can hand out. Assuming a /24 is what
     # silently locks compute nodes outside it out of /data.
     Path("/etc/exports").write_text(
-        "".join(f"/data {c}(rw,sync,no_subtree_check)\n" for c in facts["cidrs"])
+        "".join(f"/data {c}(rw,async,no_subtree_check)\n" for c in facts["cidrs"])
+    )
+    # Written here rather than in head-setup.sh so that re-running an attach,
+    # which is the documented fix for a bad export, also re-applies this.
+    Path("/etc/nfs.conf.d").mkdir(parents=True, exist_ok=True)
+    Path("/etc/nfs.conf.d/threads.conf").write_text(
+        "# Written by `cluster volume attach`. Do not edit; it is overwritten.\n"
+        f"[nfsd]\nthreads={NFSD_THREADS}\n"
     )
     run(["systemctl", "enable", "--now", "nfs-kernel-server"])
     if run(["exportfs", "-ra"]).returncode != 0:
         die("exportfs -ra failed")
+    check_nfsd_threads()
     info(f"exporting /data to {', '.join(facts['cidrs'])}")
+
+
+def check_nfsd_threads():
+    """Warn if nfsd is not actually running NFSD_THREADS threads.
+
+    rpc.nfsd reads its config only at startup and `enable --now` will not
+    restart an nfsd that is already up, so attaching onto a running server can
+    leave the old count in place. Ask the kernel rather than trust the file we
+    just wrote, so a config written but never read surfaces here rather than as
+    an unexplained slow /data.
+    """
+    threads = Path("/proc/fs/nfsd/threads")
+    if not threads.exists():  # nfsd not up; nothing to compare against.
+        return
+    actual = threads.read_text().strip()
+    if actual != str(NFSD_THREADS):
+        warn(
+            f"nfsd is running {actual} threads, not the configured "
+            f"{NFSD_THREADS}. /data will serve the cluster more slowly than it "
+            f"should. Apply with: sudo systemctl restart nfs-kernel-server"
+        )
 
 
 def data_device():
