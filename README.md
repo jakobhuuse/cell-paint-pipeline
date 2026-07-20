@@ -199,11 +199,6 @@ nextflow lint .
 nextflow config -profile standard
 ```
 
-## Deployment
-
-For provisioning a self-managed SLURM + Apptainer cluster on OpenStack (head + compute nodes,
-shared `/data` over NFS), see [deploy/README.md](deploy/README.md).
-
 ## Support
 
 Open an issue on the [issue tracker](https://github.com/jakobhuuse/cell-paint-pipeline/issues) for
