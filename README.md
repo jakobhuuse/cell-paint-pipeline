@@ -77,7 +77,7 @@ nextflow run . -profile gpu --pipeline deepprofiler
 nextflow run . -profile standard --pipeline cellprofiler \
     --input_dir /path/to/images --outdir /path/to/results
 
-# Cluster (SLURM + Apptainer), see deploy/README.md
+# Cluster (SLURM + Apptainer), see the Deployment section below
 nextflow run . -profile slurm --pipeline deepprofiler \
     --input_dir /data/input --outdir /data/results
 ```
@@ -155,7 +155,7 @@ command line with `--<name> <value>` (or in a `-params-file`).
 |---------|---------|-----|
 | `standard` | Docker (CPU) | Local development, the default. |
 | `gpu` | Docker + `--gpus all` | Local runs with a GPU for DeepProfiler inference. |
-| `slurm` | Apptainer on SLURM | HPC. See [deploy/README.md](deploy/README.md). |
+| `slurm` | Apptainer on SLURM | HPC. See [Deployment](#deployment). |
 
 ## Outputs
 
@@ -169,6 +169,22 @@ collide:
 
 With `--profiling false`, only the QC reports and single-cell `raw/` profiles are produced; the
 aggregation, normalization, cohort, and report outputs are skipped.
+
+## Deployment
+
+The `slurm` profile expects a SLURM cluster with Apptainer on every node and a shared `/data`. Building that cluster is a separate concern and lives in its own repo, [openstack-orchestrator](https://gitlab.sintef.no/jakob.huuse/openstack-orchestrator), which stands one up on an OpenStack tenant from a single hand-created head node. Its README is the runbook.
+
+Once the cluster is up, no clone is needed: Nextflow pulls this pipeline straight from GitHub and resolves its bundled `conf/` from inside the pulled copy. Give each experiment its own folder under `/data`, stage raw images plus `platemap.csv` into `input/`, and launch from inside that folder under `tmux`:
+
+```bash
+tmux new -s <experiment>
+cd /data/<experiment>
+
+nextflow run jakobhuuse/cell-paint-pipeline -profile slurm --input_dir input
+nextflow run jakobhuuse/cell-paint-pipeline -profile slurm --pipeline cellprofiler --input_dir input
+```
+
+`workDir` is the shared `/data/work` with `cache = 'lenient'`, so `-resume` from the same experiment folder cheaply re-uses completed tasks.
 
 ## Testing
 
