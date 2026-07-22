@@ -136,6 +136,7 @@ command line with `--<name> <value>` (or in a `-params-file`).
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `--cytopipe_image` | `ghcr.io/jakobhuuse/cytopipe:1.0.0` | cytopipe container image. |
+| `--cellprofiler_parquet_chunk_size` | `100` | Rows per CytoTable join pagination chunk when converting CellProfiler SQLite output to single-cell parquet, trading join throughput for peak memory. |
 
 ### pycytominer
 
