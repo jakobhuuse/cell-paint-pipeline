@@ -30,7 +30,7 @@ workflow CELLPROFILER {
     // Regroup per-chunk sqlites per plate.
     measurement = analysis.measurement.groupTuple()
 
-    single_cell = CYTOPIPE_CELLPROFILER_PARQUET(measurement)
+    single_cell = CYTOPIPE_CELLPROFILER_PARQUET(measurement, params.cellprofiler_parquet_chunk_size)
 
     // Profiling (aggregation, normalization, cohort feature selection/consensus, report).
     // Gated by params.profiling so tiny fixtures can stop at single-cell parquet.

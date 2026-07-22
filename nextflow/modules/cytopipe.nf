@@ -46,6 +46,7 @@ process CYTOPIPE_CELLPROFILER_PARQUET {
 
     input:
     tuple val(plate_id), path(measurement, stageAs: 'measurement/*')
+    val chunk_size
 
     output:
     // Optional: a plate whose CellProfiler compartments are all empty (no
@@ -54,8 +55,10 @@ process CYTOPIPE_CELLPROFILER_PARQUET {
     tuple val(plate_id), path("${plate_id}.parquet"), emit: cellprofiler_parquet, optional: true
 
     script:
+    // Empty/unset chunk_size lets cytopipe fall back to CytoTable's own preset default (1000).
+    def chunk_flag = chunk_size ? "--chunk-size ${chunk_size}" : ''
     """
-    cytopipe convert cellprofiler measurement ${plate_id}.parquet --threads ${task.cpus}
+    cytopipe convert cellprofiler measurement ${plate_id}.parquet --threads ${task.cpus} ${chunk_flag}
     """
 }
 
