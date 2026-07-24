@@ -41,24 +41,35 @@ process CYTOPIPE_BRIDGE {
 }
 
 process CYTOPIPE_CELLPROFILER_PARQUET {
+    tag { "${plate_id} ${sqlite.baseName}" }
+    label 'cytopipe'
+
+    input:
+    tuple val(plate_id), path(sqlite)
+    val chunk_size
+
+    output:
+    tuple val(plate_id), path("${sqlite.baseName}.parquet"), emit: cellprofiler_parquet, optional: true
+
+    script:
+    """
+    cytopipe convert cellprofiler ${sqlite} ${sqlite.baseName}.parquet --threads ${task.cpus}
+    """
+}
+
+process CYTOPIPE_CELLPROFILER_CONCAT {
     tag { plate_id }
     label 'cytopipe'
 
     input:
-    tuple val(plate_id), path(measurement, stageAs: 'measurement/*')
-    val chunk_size
+    tuple val(plate_id), path(parts, stageAs: 'parts/*')
 
     output:
-    // Optional: a plate whose CellProfiler compartments are all empty (no
-    // segmented objects) yields no single cells, so cytopipe writes no parquet
-    // and the plate drops out of the cohort instead of aborting the run.
-    tuple val(plate_id), path("${plate_id}.parquet"), emit: cellprofiler_parquet, optional: true
+    tuple val(plate_id), path("${plate_id}.parquet"), emit: cellprofiler_parquet
 
     script:
-    // Empty/unset chunk_size lets cytopipe fall back to CytoTable's own preset default (1000).
-    def chunk_flag = chunk_size ? "--chunk-size ${chunk_size}" : ''
     """
-    cytopipe convert cellprofiler measurement ${plate_id}.parquet --threads ${task.cpus} ${chunk_flag}
+    cytopipe convert concat parts ${plate_id}.parquet --threads ${task.cpus}
     """
 }
 

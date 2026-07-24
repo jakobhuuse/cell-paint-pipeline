@@ -1,6 +1,6 @@
 include { CELLPROFILER_QC; CELLPROFILER_ILLUM; CELLPROFILER_ANALYSIS } from '../modules/cellprofiler.nf'
 include { plateImages; loadDataChunks; platemap; flag } from '../utils.nf'
-include { CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_BASE; CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_ILLUM; CYTOPIPE_CELLPROFILER_PARQUET; CYTOPIPE_AGGREGATE; CYTOPIPE_CONCAT; CYTOPIPE_REPORT_CELLPROFILER } from '../modules/cytopipe.nf'
+include { CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_BASE; CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_ILLUM; CYTOPIPE_CELLPROFILER_PARQUET; CYTOPIPE_CELLPROFILER_CONCAT; CYTOPIPE_AGGREGATE; CYTOPIPE_CONCAT; CYTOPIPE_REPORT_CELLPROFILER } from '../modules/cytopipe.nf'
 include { PYCYTOMINER_ANNOTATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_FEATURE_SELECT; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
 workflow CELLPROFILER {
@@ -27,10 +27,12 @@ workflow CELLPROFILER {
 
     analysis = CELLPROFILER_ANALYSIS(chunks, file(params.analysis_cppipe))
 
-    // Regroup per-chunk sqlites per plate.
-    measurement = analysis.measurement.groupTuple()
+    // Convert each chunk's sqlite to its own parquet part right after analysis, so peak
+    // memory is bounded by one chunk instead of scaling with the whole plate.
+    chunk_parquet = CYTOPIPE_CELLPROFILER_PARQUET(analysis.measurement, params.cellprofiler_parquet_chunk_size)
 
-    single_cell = CYTOPIPE_CELLPROFILER_PARQUET(measurement, params.cellprofiler_parquet_chunk_size)
+    // Merge the chunk parts back into one parquet per plate.
+    single_cell = CYTOPIPE_CELLPROFILER_CONCAT(chunk_parquet.cellprofiler_parquet.groupTuple())
 
     // Profiling (aggregation, normalization, cohort feature selection/consensus, report).
     // Gated by params.profiling so tiny fixtures can stop at single-cell parquet.
