@@ -2,8 +2,7 @@
 
 Back to [README](../README.md).
 
-All parameters have defaults in [nextflow.config](../nextflow.config). Override any of them on the
-command line with `--<name> <value>` (or in a `-params-file`).
+All parameters have defaults in [nextflow.config](../nextflow.config). Override any of them on the command line with `--<name> <value>` (or in a `-params-file`).
 
 ## Project
 
@@ -39,13 +38,13 @@ command line with `--<name> <value>` (or in a `-params-file`).
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--cytopipe_image` | `ghcr.io/jakobhuuse/cytopipe:1.0.0` | cytopipe container image. |
+| `--cytopipe_image` | `ghcr.io/jakobhuuse/cytopipe:1.1.1` | cytopipe container image. |
 
 ## pycytominer
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--pycytominer_image` | `cytomining/pycytominer:1.5.1_260603` | pycytominer container image. |
+| `--pycytominer_image` | `cytomining/pycytominer:1.6.2.dev22_gdb0c469c4` | pycytominer container image. |
 | `--pycytominer_aggregate_strata_dp` | `Metadata_Plate,Metadata_Well,Metadata_Compound` | Grouping columns for well-level median aggregation, now run by `cytopipe aggregate` (DeepProfiler branch). |
 | `--pycytominer_aggregate_strata_cp` | `Metadata_Plate,Metadata_Well` | Grouping columns for well-level median aggregation, now run by `cytopipe aggregate` (CellProfiler branch). |
 | `--pycytominer_annotate_join_on` | `Metadata_DestinationWell,Metadata_Well` | Columns to join the platemap (first) onto the profiles (second) during annotation (CellProfiler branch). |
@@ -53,10 +52,4 @@ command line with `--<name> <value>` (or in a `-params-file`).
 | `--pycytominer_feature_select_ops` | `variance_threshold,correlation_threshold,blocklist` | Feature-selection operations (CellProfiler branch). |
 | `--pycytominer_consensus_columns` | `Metadata_Compound` | Grouping columns for the consensus (per-perturbation) profile. |
 
-## Profiles
-
-| Profile | Runtime | Use |
-|---------|---------|-----|
-| `standard` | Docker (CPU) | Local development, the default. |
-| `gpu` | Docker + `--gpus all` | Local runs with a GPU for DeepProfiler inference. |
-| `slurm` | Apptainer on SLURM | HPC. See [Deployment](../README.md#deployment). |
+`-profile` selects the execution runtime, not a `--param`; see [Profiles](../README.md#profiles) in the README.
