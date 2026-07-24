@@ -1,5 +1,5 @@
 process CELLPROFILER_QC {
-    tag { "${plate_id} chunk ${chunk_id}" }
+    tag { "${plate_id}.${chunk_id}" }
     label 'cellprofiler'
 
     input:
@@ -45,7 +45,7 @@ process CELLPROFILER_ILLUM {
 }
 
 process CELLPROFILER_ANALYSIS {
-    tag { "${plate_id} chunk ${chunk_id}" }
+    tag { "${plate_id}.${chunk_id}" }
     label 'cellprofiler'
 
     input:
@@ -70,7 +70,7 @@ process CELLPROFILER_ANALYSIS {
 }
 
 process CELLPROFILER_NUCLEI {
-    tag { "${plate_id} chunk ${chunk_id}" }
+    tag { "${plate_id}.${chunk_id}" }
     label 'cellprofiler'
 
     input:

@@ -29,7 +29,7 @@ workflow CELLPROFILER {
 
     // Convert each chunk's sqlite to its own parquet part right after analysis, so peak
     // memory is bounded by one chunk instead of scaling with the whole plate.
-    chunk_parquet = CYTOPIPE_CELLPROFILER_PARQUET(analysis.measurement, params.cellprofiler_parquet_chunk_size)
+    chunk_parquet = CYTOPIPE_CELLPROFILER_PARQUET(analysis.measurement)
 
     // Merge the chunk parts back into one parquet per plate.
     single_cell = CYTOPIPE_CELLPROFILER_CONCAT(chunk_parquet.cellprofiler_parquet.groupTuple())

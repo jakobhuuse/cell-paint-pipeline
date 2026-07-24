@@ -1,5 +1,5 @@
 process CYTOPIPE_LOADDATA {
-    tag { with_illum ? "${plate_id} +illum" : plate_id }
+    tag { plate_id }
     label 'cytopipe'
 
     input:
@@ -41,12 +41,11 @@ process CYTOPIPE_BRIDGE {
 }
 
 process CYTOPIPE_CELLPROFILER_PARQUET {
-    tag { "${plate_id} ${sqlite.baseName}" }
+    tag { sqlite.baseName }
     label 'cytopipe'
 
     input:
     tuple val(plate_id), path(sqlite)
-    val chunk_size
 
     output:
     tuple val(plate_id), path("${sqlite.baseName}.parquet"), emit: cellprofiler_parquet, optional: true
