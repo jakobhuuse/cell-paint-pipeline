@@ -16,8 +16,12 @@ process PYCYTOMINER_ANNOTATE {
 
     script:
     """
-    # Normalize the platemap the same way cytopipe's bridge does.
-    python3 -c "import pandas as pd; df = pd.read_csv('${platemap}', skipinitialspace=True, dtype=str, encoding='utf-8-sig'); df.columns = df.columns.str.strip(); df = df.apply(lambda c: c.str.strip()); df.to_csv('platemap.clean.csv', index=False)"
+    # Normalize the platemap the same way cytopipe's bridge does, then restrict it to this
+    # plate. The platemap spans every plate in the experiment, but join_on only matches on
+    # well (Metadata_DestinationWell = Metadata_Well), so leaving other plates' rows in would
+    # fan each well out into one duplicate per plate sharing that well (destination wells
+    # repeat across plates in the replicate synthesis-batch design).
+    python3 -c "import pandas as pd; df = pd.read_csv('${platemap}', skipinitialspace=True, dtype=str, encoding='utf-8-sig'); df.columns = df.columns.str.strip(); df = df.apply(lambda c: c.str.strip()); df = df[df['Metadata_PlateID'] == '${plate_id}']; df.to_csv('platemap.clean.csv', index=False)"
 
     pycytominer annotate \\
         --profiles "${profiles}" \\
