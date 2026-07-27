@@ -1,0 +1,46 @@
+# Bringing your own CellProfiler pipeline (.cppipe)
+
+Back to [README](../README.md).
+
+Nextflow uses 4 different cellprofiler pipelines for analysis. Below is a list over what each pipeline does, as well as the flag you can use to override it.
+
+| Flag | Replaces | What it does | Used by |
+|------|----------|--------------|---------|
+| `--qc_cppipe` | `1_QC.cppipe` | Per-image quality-control measurements. | both branches |
+| `--illum_cppipe` | `2_IllumCorrection.cppipe` | Calculates the illumination-correction function each plate needs. | CellProfiler branch only |
+| `--analysis_cppipe` | `3_JUMP_analysis.cppipe` | The main feature-extraction (JUMP analysis) pipeline. | CellProfiler branch only |
+| `--nuclei_cppipe` | `nuclei.cppipe` | Nuclei segmentation. | DeepProfiler branch only |
+
+## Modifying the pipelines
+
+It's heavily recommended to download the pipeline you want to change from [conf/cellprofiler/](https://github.com/jakobhuuse/cell-paint-pipeline/tree/main/conf/cellprofiler) on GitHub and just adjust its module parameters, rather than building one from scratch. Open the downloaded `.cppipe` file in CellProfiler, make your changes, and save it under a new name.
+
+Point the matching flag at your saved file to use it instead of the bundled default. See the example below.
+
+```bash
+nextflow run jakobhuuse/cell-paint-pipeline -profile standard --pipeline cellprofiler \
+    --analysis_cppipe /path/to/your/3_JUMP_analysis.cppipe
+```
+
+## Creating your own pipeline
+
+If adjusting parameters isn't enough, here's what a pipeline built from scratch has to accept and produce to keep working with the rest of the run.
+
+### Input
+
+Regardless of what's inside your `.cppipe`, Nextflow invokes CellProfiler headless the same way every time.
+
+```bash
+cellprofiler -c -r -p <your.cppipe> --data-file <loaddata.csv> -i <images-folder> -o <output-folder>
+```
+
+Your pipeline's first module has to be a `LoadData` module reading whatever `--data-file` points to, not an `Images`/`NamesAndTypes` chain reading files off disk directly. That CSV always has `Metadata_Plate`, `Metadata_Well`, `Metadata_Site`, and one `Image_FileName_Orig<channel>` column per channel, for the five Cell Painting channels, `AGP`, `DNA`, `ER`, `Mito`, `RNA`. Load and refer to images under those exact `Orig<channel>` names.
+
+### Output
+
+- **`--qc_cppipe`.** Free-form. Its whole output folder is published as-is under `qc/<plate>/`, nothing downstream reads a specific file out of it by name.
+- **`--illum_cppipe`.** Must save one illumination-correction image per channel, named `IllumAGP`, `IllumDNA`, `IllumER`, `IllumMito`, `IllumRNA`. `3_JUMP_analysis.cppipe`'s `CorrectIlluminationApply` modules load them back by those exact names.
+- **`--analysis_cppipe`.** Must end in an `ExportToDatabase` module writing a SQLite file named `measurements.sqlite`, exporting the `Cells`, `Cytoplasm`, and `Nuclei` object tables, with `Plate` and `Well` set as the plate and well metadata. `pycytominer` reads those object and column names afterward.
+- **`--nuclei_cppipe`.** Must produce a per-site nuclei-locations file at `locations/<well>-<site>-Nuclei.csv` (an `ExportToSpreadsheet` module exporting just `Nuclei|Location_Center_X`/`Location_Center_Y`), plus a flat `Image.csv` at the output root carrying at least `Metadata_Plate`/`Well`/`Site` and `FileName_Orig<channel>` columns. `cytopipe`'s DeepProfiler bridge reads both by these exact names to hand nuclei coordinates to DeepProfiler.
+
+Get a filename or column name wrong and the run typically doesn't fail inside CellProfiler, it fails a step or two later inside `cytopipe` or `pycytominer`, further from where the actual mistake was made.

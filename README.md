@@ -47,6 +47,8 @@ For local development, clone the repo and run from the checkout (`nextflow run .
 - Docker (local) or Apptainer (HPC).
 - A GPU is optional but strongly recommended for the DeepProfiler branch.
 
+New to Nextflow, or on Windows where it needs WSL? See [docs/running-guide.md](docs/running-guide.md) for a non-technical, step-by-step walkthrough (including a path that skips WSL by running on a remote SLURM cluster instead).
+
 ## Usage
 
 ```bash
@@ -72,7 +74,7 @@ Point `--input_dir` at a directory laid out as `<input_dir>/<plate_glob>/…imag
 
 - **Images**: `.tif` files under each plate directory (`*_thumb` thumbnails are ignored).
 - **`platemap.csv`**: directly under `--input_dir`, mapping wells to compounds/metadata.
-- **CellProfiler pipelines** (`.cppipe`): bundled in [conf/cellprofiler/](conf/cellprofiler/), covering QC, illumination correction, JUMP analysis, and nuclei segmentation. Swap via the `*_cppipe` params. The `deepprofiler` branch still uses `nuclei_cppipe` for segmentation.
+- **CellProfiler pipelines** (`.cppipe`): bundled in [conf/cellprofiler/](conf/cellprofiler/), covering QC, illumination correction, JUMP analysis, and nuclei segmentation. Swap via the `*_cppipe` params. The `deepprofiler` branch still uses `nuclei_cppipe` for segmentation. See [docs/cppipe-guide.md](docs/cppipe-guide.md) for adjusting or replacing one of these.
 - **DeepProfiler config + model**: bundled in [conf/deepprofiler/](conf/deepprofiler/) (`config.json`, `model.hdf5`). Override with `--deepprofiler_config` / `--deepprofiler_model`.
 
 ## Parameters
