@@ -12,6 +12,7 @@ workflow {
     ch_selected_profiles   = channel.empty()
     ch_consensus_profiles  = channel.empty()
     ch_report_figures      = channel.empty()
+    ch_skipped_chunks      = channel.empty()
 
     if( params.pipeline == 'deepprofiler' ) {
         dp = DEEPPROFILER()
@@ -29,6 +30,7 @@ workflow {
         ch_selected_profiles   = cp.selected_profiles
         ch_consensus_profiles  = cp.consensus_profiles
         ch_report_figures      = cp.report_figures
+        ch_skipped_chunks      = cp.skipped_chunks
     }
     else {
         error "Unknown --pipeline '${params.pipeline}'. Choose 'deepprofiler' or 'cellprofiler'."
@@ -41,10 +43,11 @@ workflow {
     selected_profiles   = ch_selected_profiles
     consensus_profiles  = ch_consensus_profiles
     report_figures      = ch_report_figures
+    skipped_chunks      = ch_skipped_chunks
 }
 
 // Outputs land under `<pipeline>/...` so the two branches never collide in the results dir.
-// selected_profiles is only produced by the CellProfiler branch.
+// selected_profiles and skipped_chunks are only produced by the CellProfiler branch.
 output {
     qc_reports          { path { plate_id, _qc_dir -> "${params.pipeline}/qc/${plate_id}" } }
     raw_profiles        { path "${params.pipeline}/raw" }
@@ -52,4 +55,7 @@ output {
     selected_profiles   { path "${params.pipeline}" }
     consensus_profiles  { path "${params.pipeline}" }
     report_figures      { path "${params.pipeline}" }
+    // Per plate, one .skipped.txt per chunk that had zero segmented objects (e.g. every
+    // cell in it died), so that's visible in results instead of only a build-time log line.
+    skipped_chunks      { path { plate_id, _files -> "${params.pipeline}/qc/${plate_id}/skipped_chunks" } }
 }

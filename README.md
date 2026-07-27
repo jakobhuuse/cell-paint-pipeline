@@ -72,7 +72,7 @@ nextflow run . -profile slurm --pipeline deepprofiler \
 
 Point `--input_dir` at a directory laid out as `<input_dir>/<plate_glob>/…images…`, plus a platemap. With the default `--plate_glob '*/*'`, plates live two levels down (e.g. `tests/data/2025-12-16/26159/`). Requirements:
 
-- **Images**: `.tif` files under each plate directory (`*_thumb` thumbnails are ignored).
+- **Images**: `.tif` files under each plate directory (`*_thumb` thumbnails are ignored), named `..._w<N>...`. `cytopipe loaddata` (run internally by the pipeline) maps `w1..w5` to a fixed DNA/Mito/AGP/RNA/ER channel order, a hardcoded assumption about the acquisition's filter configuration that nothing in either codebase verifies. **Before trusting results from a new microscope, protocol, or filter configuration, confirm that mapping against the actual acquisition setup**, see [cytopipe's README warning](https://github.com/jakobhuuse/cytopipe#warning-verify-the-channel-mapping-for-a-new-acquisition-protocol). If it's wrong, every measurement and every DeepProfiler embedding channel is silently mislabeled by stain, with no error raised anywhere.
 - **`platemap.csv`**: directly under `--input_dir`, mapping wells to compounds/metadata.
 - **CellProfiler pipelines** (`.cppipe`): bundled in [conf/cellprofiler/](conf/cellprofiler/), covering QC, illumination correction, JUMP analysis, and nuclei segmentation. Swap via the `*_cppipe` params. The `deepprofiler` branch still uses `nuclei_cppipe` for segmentation. See [docs/cppipe-guide.md](docs/cppipe-guide.md) for adjusting or replacing one of these.
 - **DeepProfiler config + model**: bundled in [conf/deepprofiler/](conf/deepprofiler/) (`config.json`, `model.hdf5`). Override with `--deepprofiler_config` / `--deepprofiler_model`.
@@ -101,6 +101,7 @@ The two most commonly overridden.
 Everything is published under `--outdir`, namespaced by branch (`<pipeline>/…`) so the two never collide:
 
 - `<pipeline>/qc/<plate_id>/`: per-plate QC reports.
+- `<pipeline>/qc/<plate_id>/skipped_chunks/` (CellProfiler branch only): one `.skipped.txt` per chunk that had zero segmented objects (e.g. every cell in it died), so a plate's single-cell parquet having fewer rows than expected is traceable to a reason instead of just missing silently. Empty (not created) when nothing was skipped.
 - `<pipeline>/raw/`, `<pipeline>/normalized/`: single-cell and normalized profiles.
 - `<pipeline>/`: feature-selected (CellProfiler only), consensus profiles, and report figures.
 - `nextflow/<timestamp>/`: Nextflow `trace.txt`, `report.html`, and `timeline.html`.

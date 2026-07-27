@@ -34,6 +34,10 @@ workflow CELLPROFILER {
     // Merge the chunk parts back into one parquet per plate.
     single_cell = CYTOPIPE_CELLPROFILER_CONCAT(chunk_parquet.cellprofiler_parquet.groupTuple())
 
+    // Chunks skipped as empty (zero segmented objects), grouped per plate so the reason a
+    // plate's single-cell parquet has fewer rows than expected is published, not just logged.
+    skipped_chunks = chunk_parquet.skipped.groupTuple()
+
     // Profiling (aggregation, normalization, cohort feature selection/consensus, report).
     // Gated by params.profiling so tiny fixtures can stop at single-cell parquet.
     normalized_profiles = channel.empty()
@@ -70,4 +74,5 @@ workflow CELLPROFILER {
     selected_profiles   = selected_profiles
     consensus_profiles  = consensus_profiles
     report_figures      = report_figures
+    skipped_chunks      = skipped_chunks
 }

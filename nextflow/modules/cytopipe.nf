@@ -49,6 +49,9 @@ process CYTOPIPE_CELLPROFILER_PARQUET {
 
     output:
     tuple val(plate_id), path("${sqlite.baseName}.parquet"), emit: cellprofiler_parquet, optional: true
+    // Written only when this chunk's sqlite had an empty compartment (zero segmented objects,
+    // e.g. every cell in it died), so nothing else here means the chunk silently vanished.
+    tuple val(plate_id), path("${sqlite.baseName}.parquet.skipped.txt"), emit: skipped, optional: true
 
     script:
     """
