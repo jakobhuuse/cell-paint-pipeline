@@ -1,6 +1,6 @@
 include { CELLPROFILER_NUCLEI } from '../modules/cellprofiler.nf'
 include { plateImages; platemap; deepprofilerFeatures; loadDataChunks; flag } from '../utils.nf'
-include { CYTOPIPE_LOADDATA; CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_AGGREGATE; CYTOPIPE_CONCAT; CYTOPIPE_REPORT_DEEPPROFILER } from '../modules/cytopipe.nf'
+include { CYTOPIPE_LOADDATA; CYTOPIPE_LOADDATA_FILTER; CYTOPIPE_BRIDGE; CYTOPIPE_DEEPPROFILER_PARQUET; CYTOPIPE_AGGREGATE; CYTOPIPE_CONCAT; CYTOPIPE_REPORT_DEEPPROFILER } from '../modules/cytopipe.nf'
 include { DEEPPROFILER_PREPARE; DEEPPROFILE } from '../modules/deepprofiler.nf'
 include { PYCYTOMINER_NORMALIZE; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
@@ -8,12 +8,24 @@ workflow DEEPPROFILER {
     main:
     images = plateImages()
 
-    loaddata = CYTOPIPE_LOADDATA(images, false, params.cellprofiler_chunk_size)
+    loaddata_raw = CYTOPIPE_LOADDATA(images, false, params.cellprofiler_chunk_size)
+
+    // Filtered before nuclei segmentation (a no-op against the empty conf/qc/no_exclusions.csv
+    // default). Unlike the CellProfiler branch, QC and nuclei segmentation are the same
+    // CELLPROFILER_NUCLEI pass here, so there is no cheaper way to exclude images that skips it.
+    loaddata = CYTOPIPE_LOADDATA_FILTER(
+        loaddata_raw.csv,
+        file(params.qc_exclude_file),
+        params.cellprofiler_chunk_size
+    )
 
     chunks = loadDataChunks(loaddata.chunks, images)
 
+    // nuclei.cppipe also computes image-quality measurements as a byproduct of segmentation,
+    // but this branch no longer publishes or reviews them. QC review lives entirely in
+    // `--pipeline qc` (nextflow/workflows/qc.nf), which uses 1_QC.cppipe instead.
     cellprofiler = CELLPROFILER_NUCLEI(chunks, file(params.nuclei_cppipe))
-    
+
     image_csv = cellprofiler.image_csv.groupTuple()
 
     locations = cellprofiler.locations
@@ -68,7 +80,6 @@ workflow DEEPPROFILER {
     }
 
     emit:
-    qc_reports          = cellprofiler.qc
     raw_profiles        = single_cell.deepprofiler_parquet
     normalized_profiles = normalized_profiles
     consensus_profiles  = consensus_profiles

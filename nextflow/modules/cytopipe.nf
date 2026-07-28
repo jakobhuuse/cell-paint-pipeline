@@ -19,6 +19,42 @@ process CYTOPIPE_LOADDATA {
     """
 }
 
+process CYTOPIPE_QC_REVIEW {
+    label 'cytopipe'
+    label 'cohort'
+
+    input:
+    path 'qc_input/*'
+
+    output:
+    path 'review/gallery.html', emit: gallery
+
+    script:
+    """
+    cytopipe qc qc_input --out-dir review
+    """
+}
+
+process CYTOPIPE_LOADDATA_FILTER {
+    tag { plate_id }
+    label 'cytopipe'
+
+    input:
+    tuple val(plate_id), path(load_data_csv)
+    path exclude_csv
+    val chunk_size
+
+    output:
+    tuple val(plate_id), path("${plate_id}.filtered.load_data.csv"),                 emit: csv
+    tuple val(plate_id), path('chunks/*.load_data.csv'), path('chunks/*.images.txt'), emit: chunks
+
+    script:
+    """
+    cytopipe loaddata-filter ${load_data_csv} ${exclude_csv} ${plate_id}.filtered.load_data.csv \\
+        --chunk-size ${chunk_size}
+    """
+}
+
 process CYTOPIPE_BRIDGE {
     tag { plate_id }
     label 'cytopipe'

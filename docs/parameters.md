@@ -8,10 +8,9 @@ All parameters have defaults in [nextflow.config](../nextflow.config). Override 
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--pipeline` | `deepprofiler` | Which branch to run: `deepprofiler` or `cellprofiler`. |
+| `--pipeline` | `deepprofiler` | Which branch to run, `deepprofiler`, `cellprofiler`, or `qc` (a branch-agnostic quality-control pass, see [running-guide.md](running-guide.md#reviewing-image-quality-first-optional)). |
 | `--profiling` | `true` | Run the profiling tail (aggregate, normalize, feature selection/consensus, report). Set `false` for tiny fixtures, where the cohort statistics are undefined and the run would abort; it then stops at single-cell parquet. |
-| `--input_dir` | `${projectDir}/tests/data` | Root of the raw images, and must also contain `platemap.csv`. |
-| `--plate_glob` | `*/*` | Glob (relative to `input_dir`) selecting per-plate image directories. |
+| `--input_dir` | `${projectDir}/tests/data` | Raw images, pointed at an experiment folder, a single date folder, or a single plate folder (auto-detected). `platemap.csv` must sit at the experiment root. |
 | `--outdir` | `results` | Where published outputs and run reports land. |
 
 ## CellProfiler
@@ -19,7 +18,7 @@ All parameters have defaults in [nextflow.config](../nextflow.config). Override 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `--cellprofiler_image` | `cellprofiler/cellprofiler:4.2.8` | CellProfiler container image. |
-| `--qc_cppipe` | `conf/cellprofiler/1_QC.cppipe` | Quality-control pipeline. |
+| `--qc_cppipe` | `conf/cellprofiler/1_QC.cppipe` | Quality-control pipeline, used by `--pipeline qc` (branch-agnostic). |
 | `--illum_cppipe` | `conf/cellprofiler/2_IllumCorrection.cppipe` | Illumination-correction pipeline. |
 | `--analysis_cppipe` | `conf/cellprofiler/3_JUMP_analysis.cppipe` | Feature-extraction (JUMP analysis) pipeline. |
 | `--nuclei_cppipe` | `conf/cellprofiler/nuclei.cppipe` | Nuclei segmentation (also used by the DeepProfiler branch). |
@@ -33,6 +32,12 @@ All parameters have defaults in [nextflow.config](../nextflow.config). Override 
 | `--deepprofiler_model` | `conf/deepprofiler/model.hdf5` | Trained model checkpoint. |
 | `--deepprofiler_config` | `conf/deepprofiler/config.json` | DeepProfiler configuration. |
 | `--deepprofiler_embedding_dim` | `672` | Embedding length, which sets the `efficientnet_1..N` feature names passed to the aggregation and pycytominer steps. |
+
+## QC
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--qc_exclude_file` | `conf/qc/no_exclusions.csv` (empty) | Plate/Well/Site rows to drop before analysis (CellProfiler branch) or before nuclei segmentation (DeepProfiler branch). Point this at an exclusion list downloaded from a `--pipeline qc` run's gallery. |
 
 ## cytopipe
 

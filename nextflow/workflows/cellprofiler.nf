@@ -1,27 +1,32 @@
-include { CELLPROFILER_QC; CELLPROFILER_ILLUM; CELLPROFILER_ANALYSIS } from '../modules/cellprofiler.nf'
+include { CELLPROFILER_ILLUM; CELLPROFILER_ANALYSIS } from '../modules/cellprofiler.nf'
 include { plateImages; loadDataChunks; platemap; flag } from '../utils.nf'
-include { CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_BASE; CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_ILLUM; CYTOPIPE_CELLPROFILER_PARQUET; CYTOPIPE_CELLPROFILER_CONCAT; CYTOPIPE_AGGREGATE; CYTOPIPE_CONCAT; CYTOPIPE_REPORT_CELLPROFILER } from '../modules/cytopipe.nf'
+include { CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_BASE; CYTOPIPE_LOADDATA as CYTOPIPE_LOADDATA_ILLUM; CYTOPIPE_LOADDATA_FILTER; CYTOPIPE_CELLPROFILER_PARQUET; CYTOPIPE_CELLPROFILER_CONCAT; CYTOPIPE_AGGREGATE; CYTOPIPE_CONCAT; CYTOPIPE_REPORT_CELLPROFILER } from '../modules/cytopipe.nf'
 include { PYCYTOMINER_ANNOTATE; PYCYTOMINER_NORMALIZE; PYCYTOMINER_FEATURE_SELECT; PYCYTOMINER_CONSENSUS } from '../modules/pycytominer.nf'
 
 workflow CELLPROFILER {
     main:
     images = plateImages()
 
-    // Base (no-illum) LoadData CSV + chunks
+    // Base (no-illum) LoadData CSV + chunks. QC review now lives entirely in `--pipeline qc`
+    // (nextflow/workflows/qc.nf), this branch no longer runs its own diagnostic QC pass.
     base_csv = CYTOPIPE_LOADDATA_BASE(images, false, params.cellprofiler_chunk_size)
 
-    // Diagnostic QC
-    qc_chunks = loadDataChunks(base_csv.chunks, images)
-    qc = CELLPROFILER_QC(qc_chunks, file(params.qc_cppipe))
-
-    // Illum is computed over the whole plate, so it takes the un-chunked CSV.
+    // Illum is computed over the whole plate, so it takes the un-chunked CSV. Also unfiltered,
+    // a handful of excluded images doesn't meaningfully skew a whole-plate illumination function.
     illum = CELLPROFILER_ILLUM(
         images.join(base_csv.csv).map { plate_id, imgs, csv -> tuple(plate_id, csv, imgs) },
         file(params.illum_cppipe)
     )
 
-    // Analysis runs per chunk on a with-illum CSV.
-    analysis_csv = CYTOPIPE_LOADDATA_ILLUM(images, true, params.cellprofiler_chunk_size)
+    // Analysis runs per chunk on a with-illum CSV, filtered by qc_exclude_file (a no-op against
+    // the empty conf/qc/no_exclusions.csv default). Since QC/illum above never depend on this
+    // file, changing it and re-running with -resume only recomputes analysis and downstream.
+    analysis_csv_raw = CYTOPIPE_LOADDATA_ILLUM(images, true, params.cellprofiler_chunk_size)
+    analysis_csv = CYTOPIPE_LOADDATA_FILTER(
+        analysis_csv_raw.csv,
+        file(params.qc_exclude_file),
+        params.cellprofiler_chunk_size
+    )
     chunks = loadDataChunks(analysis_csv.chunks, images)
         .combine(illum.illum, by: 0)
 
@@ -68,7 +73,6 @@ workflow CELLPROFILER {
     }
 
     emit:
-    qc_reports          = qc.qc
     raw_profiles        = single_cell.cellprofiler_parquet
     normalized_profiles = normalized_profiles
     selected_profiles   = selected_profiles

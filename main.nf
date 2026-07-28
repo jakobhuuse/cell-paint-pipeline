@@ -1,12 +1,16 @@
 include { DEEPPROFILER } from './nextflow/workflows/deepprofiler.nf'
 include { CELLPROFILER } from './nextflow/workflows/cellprofiler.nf'
+include { QC } from './nextflow/workflows/qc.nf'
 
-// Entry point. The CellProfiler and DeepProfiler branches are independent feature-extraction
-// workflows. `--pipeline` selects which one to run (default set in nextflow.config).
+// Entry point. `--pipeline` selects which of three independent workflows to run (default set
+// in nextflow.config), the CellProfiler and DeepProfiler feature-extraction branches, or the
+// branch-agnostic `qc` review pass (run this first, then point --qc_exclude_file at its output
+// before running either of the other two).
 workflow {
     main:
-    // Publish targets shared across both branches.
+    // Publish targets shared across all three pipeline choices.
     ch_qc_reports          = channel.empty()
+    ch_gallery             = channel.empty()
     ch_raw_profiles        = channel.empty()
     ch_normalized_profiles = channel.empty()
     ch_selected_profiles   = channel.empty()
@@ -16,7 +20,6 @@ workflow {
 
     if( params.pipeline == 'deepprofiler' ) {
         dp = DEEPPROFILER()
-        ch_qc_reports          = dp.qc_reports
         ch_raw_profiles        = dp.raw_profiles
         ch_normalized_profiles = dp.normalized_profiles
         ch_consensus_profiles  = dp.consensus_profiles
@@ -24,7 +27,6 @@ workflow {
     }
     else if( params.pipeline == 'cellprofiler' ) {
         cp = CELLPROFILER()
-        ch_qc_reports          = cp.qc_reports
         ch_raw_profiles        = cp.raw_profiles
         ch_normalized_profiles = cp.normalized_profiles
         ch_selected_profiles   = cp.selected_profiles
@@ -32,12 +34,18 @@ workflow {
         ch_report_figures      = cp.report_figures
         ch_skipped_chunks      = cp.skipped_chunks
     }
+    else if( params.pipeline == 'qc' ) {
+        q = QC()
+        ch_qc_reports = q.qc_reports
+        ch_gallery    = q.gallery
+    }
     else {
-        error "Unknown --pipeline '${params.pipeline}'. Choose 'deepprofiler' or 'cellprofiler'."
+        error "Unknown --pipeline '${params.pipeline}'. Choose 'deepprofiler', 'cellprofiler', or 'qc'."
     }
 
     publish:
     qc_reports          = ch_qc_reports
+    gallery             = ch_gallery
     raw_profiles        = ch_raw_profiles
     normalized_profiles = ch_normalized_profiles
     selected_profiles   = ch_selected_profiles
@@ -46,10 +54,10 @@ workflow {
     skipped_chunks      = ch_skipped_chunks
 }
 
-// Outputs land under `<pipeline>/...` so the two branches never collide in the results dir.
-// selected_profiles and skipped_chunks are only produced by the CellProfiler branch.
+// Outputs land under `<pipeline>/...` so the three choices never collide in the results dir.
 output {
-    qc_reports          { path { plate_id, _qc_dir -> "${params.pipeline}/qc/${plate_id}" } }
+    qc_reports          { path { plate_id, _qc_dir -> "${params.pipeline}/${plate_id}" } }
+    gallery             { path "${params.pipeline}" }
     raw_profiles        { path "${params.pipeline}/raw" }
     normalized_profiles { path "${params.pipeline}/normalized" }
     selected_profiles   { path "${params.pipeline}" }

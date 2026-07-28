@@ -10,7 +10,7 @@ Two independent feature-extraction branches are available. Pick one per run with
 - **`deepprofiler`** (default): deep-learning single-cell embeddings.
 - **`cellprofiler`**: classical computer-vision measurements.
 
-Both start from the same raw images and converge on well- and consensus-level profiles, but the stages in between differ (see the diagram below).
+Both start from the same raw images and converge on well- and consensus-level profiles, but the stages in between differ (see the diagram below). A third, branch-agnostic **`qc`** pipeline choice is also available, run it first to visually review images by their per-channel focus-blur metric and build an exclusion list, then point `--qc_exclude_file` at that list on the real run. See [Reviewing image quality first](docs/running-guide.md#reviewing-image-quality-first-optional) in the running guide.
 
 ## Data flow
 
@@ -28,7 +28,7 @@ Both start from the same raw images and converge on well- and consensus-level pr
   | pycytominer | `cytomining/pycytominer:1.6.2.dev22_gdb0c469c4` | official, pinned (built-in CLI) |
   | cytopipe | `ghcr.io/jakobhuuse/cytopipe:1.1.1` | built from the [cytopipe repo](https://github.com/jakobhuuse/cytopipe) (our code) |
 
-- **`cytopipe`** is the data-management/glue layer. It lives in its own repo ([jakobhuuse/cytopipe](https://github.com/jakobhuuse/cytopipe)) and is consumed here purely as a container image (`--cytopipe_image`). Its CLI exposes `cytopipe loaddata` (build CellProfiler LoadData CSVs + chunking), `cytopipe convert` (image-tool output → single-cell parquet), `cytopipe bridge` (CellProfiler → DeepProfiler metadata handoff), `cytopipe aggregate` (well-level median profiles, a memory-bounded DuckDB replacement for `pycytominer aggregate`), and `cytopipe report` (QC figures from the published profiles). CellProfiler, DeepProfiler, and the remaining pycytominer steps run via their own images' native entrypoints.
+- **`cytopipe`** is the data-management/glue layer. It lives in its own repo ([jakobhuuse/cytopipe](https://github.com/jakobhuuse/cytopipe)) and is consumed here purely as a container image (`--cytopipe_image`). Its CLI exposes `cytopipe loaddata` (build CellProfiler LoadData CSVs + chunking), `cytopipe loaddata-filter` (drop QC-excluded images from a LoadData CSV), `cytopipe convert` (image-tool output → single-cell parquet), `cytopipe bridge` (CellProfiler → DeepProfiler metadata handoff), `cytopipe aggregate` (well-level median profiles, a memory-bounded DuckDB replacement for `pycytominer aggregate`), `cytopipe qc` (build the image-review gallery from a plate's QC output), and `cytopipe report` (QC figures from the published profiles). CellProfiler, DeepProfiler, and the remaining pycytominer steps run via their own images' native entrypoints.
 
 ## Installation
 
@@ -70,7 +70,7 @@ nextflow run . -profile slurm --pipeline deepprofiler \
 
 ## Inputs
 
-Point `--input_dir` at a directory laid out as `<input_dir>/<plate_glob>/…images…`, plus a platemap. With the default `--plate_glob '*/*'`, plates live two levels down (e.g. `tests/data/2025-12-16/26159/`). Requirements:
+Point `--input_dir` at the experiment folder (`tests/data/`, containing date folders), a single date folder (`tests/data/2025-12-16/`), or a single plate folder (`tests/data/2025-12-16/26159/`); the level is auto-detected. Any other folders mixed in alongside dates or plates (e.g. a previous run's output) are skipped, since they don't themselves contain plate folders or `.tif` files. Requirements:
 
 - **Images**: `.tif` files under each plate directory (`*_thumb` thumbnails are ignored), named `..._w<N>...`. `cytopipe loaddata` (run internally by the pipeline) maps `w1..w5` to a fixed DNA/Mito/AGP/RNA/ER channel order, a hardcoded assumption about the acquisition's filter configuration that nothing in either codebase verifies. **Before trusting results from a new microscope, protocol, or filter configuration, confirm that mapping against the actual acquisition setup**, see [cytopipe's README warning](https://github.com/jakobhuuse/cytopipe#warning-verify-the-channel-mapping-for-a-new-acquisition-protocol). If it's wrong, every measurement and every DeepProfiler embedding channel is silently mislabeled by stain, with no error raised anywhere.
 - **`platemap.csv`**: directly under `--input_dir`, mapping wells to compounds/metadata.
@@ -85,7 +85,7 @@ The two most commonly overridden.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--pipeline` | `deepprofiler` | Which branch to run: `deepprofiler` or `cellprofiler`. |
+| `--pipeline` | `deepprofiler` | Which branch to run, `deepprofiler`, `cellprofiler`, or `qc` (a branch-agnostic quality-control pass). |
 | `--input_dir` | `${projectDir}/tests/data` | Root of the raw images, and must also contain `platemap.csv`. |
 
 ### Profiles
@@ -98,15 +98,16 @@ The two most commonly overridden.
 
 ## Outputs
 
-Everything is published under `--outdir`, namespaced by branch (`<pipeline>/…`) so the two never collide:
+Everything is published under `--outdir`, namespaced by pipeline choice (`<pipeline>/…`) so `deepprofiler`, `cellprofiler`, and `qc` never collide.
 
-- `<pipeline>/qc/<plate_id>/`: per-plate QC reports.
-- `<pipeline>/qc/<plate_id>/skipped_chunks/` (CellProfiler branch only): one `.skipped.txt` per chunk that had zero segmented objects (e.g. every cell in it died), so a plate's single-cell parquet having fewer rows than expected is traceable to a reason instead of just missing silently. Empty (not created) when nothing was skipped.
-- `<pipeline>/raw/`, `<pipeline>/normalized/`: single-cell and normalized profiles.
-- `<pipeline>/`: feature-selected (CellProfiler only), consensus profiles, and report figures.
-- `nextflow/<timestamp>/`: Nextflow `trace.txt`, `report.html`, and `timeline.html`.
+- `<pipeline>/qc/<plate_id>/skipped_chunks/` (CellProfiler branch only), one `.skipped.txt` per chunk that had zero segmented objects (e.g. every cell in it died), so a plate's single-cell parquet having fewer rows than expected is traceable to a reason instead of just missing silently. Empty (not created) when nothing was skipped.
+- `<pipeline>/raw/`, `<pipeline>/normalized/`, single-cell and normalized profiles.
+- `<pipeline>/`, feature-selected (CellProfiler only), consensus profiles, and report figures.
+- `nextflow/<timestamp>/`, Nextflow `trace.txt`, `report.html`, and `timeline.html`.
 
-With `--profiling false`, only the QC reports and single-cell `raw/` profiles are produced; the aggregation, normalization, cohort, and report outputs are skipped.
+With `--profiling false`, only the single-cell `raw/` profiles are produced. The aggregation, normalization, cohort, and report outputs are skipped.
+
+Running `--pipeline qc` publishes something different, a combined `qc/gallery.html` reviewing every plate's images and QC metrics in one page, plus `qc/<plate_id>/` underneath it holding each plate's raw CellProfiler QC output.
 
 ## Deployment
 

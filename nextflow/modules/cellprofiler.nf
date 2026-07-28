@@ -7,17 +7,17 @@ process CELLPROFILER_QC {
     path cppipe
 
     output:
-    tuple val(plate_id), path("chunk${chunk_id}"), emit: qc
+    tuple val(plate_id), path("${plate_id}.${chunk_id}"), emit: qc
 
     script:
     """
-    mkdir -p chunk${chunk_id}
+    mkdir -p ${plate_id}.${chunk_id}
 
     cellprofiler -c -r \\
         -p ${cppipe} \\
         --data-file ${load_data} \\
         -i "\$PWD" \\
-        -o chunk${chunk_id}
+        -o ${plate_id}.${chunk_id}
     """
 }
 
