@@ -38,7 +38,11 @@ my_experiment/
 
 The pipeline looks for `.tif` files anywhere inside each plate folder, so a `TimePoint_1` subfolder (or several, one per timepoint) works with no extra setup, nothing to change on the command line for that.
 
-`--input_dir` can point at any level of this layout: the experiment folder shown above (all dates, all plates), a single date folder (all plates for that date), or a single plate folder (just that plate). The pipeline figures out which level you gave it. `platemap.csv` still needs to sit at the experiment root either way. Any other folders mixed in alongside the dates or plates, e.g. a `results/` folder from a previous run, are ignored automatically, since they don't themselves look like a date or plate folder.
+`--input_dir` can point at any level of this layout, the experiment folder shown above (all dates, all plates), a single date folder (all plates for that date), or a single plate folder (just that plate).
+
+The pipeline works out which level you gave it by looking for `platemap.csv`, which always sits at the experiment root. It checks `--input_dir` itself, then its parent folder, then its grandparent, and whichever one actually has `platemap.csv` tells it how many levels to descend to reach plate folders. So `platemap.csv` needs to sit at the experiment root either way, no more than two folders above wherever you point `--input_dir`, or the pipeline errors out rather than guessing.
+
+Any other folders mixed in alongside the dates or plates, e.g. a `results/` folder from a previous run, get dropped automatically too, since they end up with no `.tif` images once the pipeline looks inside them.
 
 `platemap.csv` itself needs a specific shape, a plain comma-separated CSV, one row per well, with these columns present:
 

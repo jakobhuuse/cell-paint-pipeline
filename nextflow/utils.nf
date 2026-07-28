@@ -7,30 +7,33 @@ def plateTifs(dir) {
     files("${dir}/**/*.tif").findAll { tif -> !tif.name.toLowerCase().contains('_thumb') }.sort()
 }
 
-// True if `dir` has at least one usable .tif anywhere inside it, i.e. it's a plate folder.
-def looksLikePlate(dir) {
-    plateTifs(dir) as boolean
+// platemap.csv always sits at the experiment root, whether that's params.input_dir itself, its
+// parent, or its grandparent. Which of those it's found at also tells us how many levels below
+// the root input_dir sits, 0 if input_dir IS the root, 1 if it's a date folder, 2 if it's a
+// single plate folder, since the layout is fixed as experiment/date/plate/timepoint(optional)/
+// tifs. That count drives plateDirs() below, rather than guessing from where the tifs sit: an
+// optional per-plate timepoint folder makes tif depth alone ambiguous between "this dir is a
+// plate with a timepoint subfolder" and "this dir is a date folder whose plates skip it".
+def experimentRoot() {
+    def dir = file(params.input_dir)
+    def candidates = [dir, dir.parent, dir.parent?.parent]
+    def index = candidates.findIndexOf { candidate -> candidate?.resolve('platemap.csv')?.exists() }
+    if( index == -1 ) {
+        error('No platemap.csv found near --input_dir ' + params.input_dir +
+              ' (looked in: ' + candidates.findAll().join(', ') + ')')
+    }
+    [candidates[index], 2 - index]
 }
 
-// Resolve `params.input_dir` to plate folders regardless of which level it points at. 
-// It could be an experiment folder (dates/plates/tifs), a single date folder (plates/tifs), or a single plate
-// folder (tifs directly). At each level, only children that look like the next level down are
-// descended into, so stray folders (a previous run's results dir, etc.) are skipped rather than
-// misread as dates or plates.
+// Resolve `params.input_dir` to plate folders regardless of which level it points at: the
+// experiment root (dates/plates), a single date folder (plates), or a single plate folder itself.
 def plateDirs() {
-    def root = file(params.input_dir)
-    if( looksLikePlate(root) ) {
-        return [root]
+    def descents = experimentRoot()[1]
+    def dirs = [file(params.input_dir)]
+    descents.times {
+        dirs = dirs.collectMany { dir -> dir.listFiles().findAll { child -> child.isDirectory() } }
     }
-    def children = root.listFiles().findAll { child -> child.isDirectory() }
-    def plates = children.findAll { child -> looksLikePlate(child) }
-    if( plates ) {
-        return plates.sort { a, b -> a.name <=> b.name }
-    }
-    children
-        .collectMany { dateDir -> dateDir.listFiles().findAll { child -> child.isDirectory() } }
-        .findAll { plate -> looksLikePlate(plate) }
-        .sort { a, b -> a.name <=> b.name }
+    dirs.sort { a, b -> a.name <=> b.name }
 }
 
 // Per-plate input images: (plate_id, [sorted tifs]).
@@ -66,15 +69,9 @@ def loadDataChunks(chunksCh, imagesCh) {
         }
 }
 
-// Platemap for the run. Sits at the experiment root, alongside the date folders, so it's found
-// by walking up from params.input_dir whether that points at the experiment root, a date folder,
-// or a single plate folder.
+// Platemap for the run, resolved via experimentRoot() above.
 def platemap() {
-    def dir = file(params.input_dir)
-    def candidates = [dir, dir.parent, dir.parent?.parent].findAll()
-    candidates.collect { candidate -> candidate.resolve('platemap.csv') }.find { file -> file.exists() } ?:
-        error('No platemap.csv found near --input_dir ' + params.input_dir +
-              ' (looked in: ' + candidates.join(', ') + ')')
+    experimentRoot()[0].resolve('platemap.csv')
 }
 
 // pycytominer --features list for DeepProfiler embeddings: efficientnet_1..N.
