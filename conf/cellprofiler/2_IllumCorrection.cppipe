@@ -606,7 +606,7 @@ SaveImages:[module_num:33|svn_version:'Unknown'|variable_revision_number:16|show
     Append a suffix to the image file name?:No
     Text to append to the image name:
     Saved file format:npy
-    Output file location:Default Input Folder sub-folder|Output folder\\\g<Experiment>
+    Output file location:Default Input Folder sub-folder|Output folder/\g<Experiment>
     Image bit depth:8-bit integer
     Overwrite existing files without warning?:No
     When to save:Last cycle

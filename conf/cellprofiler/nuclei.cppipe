@@ -490,7 +490,7 @@ ExportToSpreadsheet:[module_num:26|svn_version:'Unknown'|variable_revision_numbe
     Calculate the per-image mean values for object measurements?:No
     Calculate the per-image median values for object measurements?:No
     Calculate the per-image standard deviation values for object measurements?:No
-    Output file location:Default Output Folder sub-folder|QCb3\\\g<Plate>_\g<Well>
+    Output file location:Default Output Folder sub-folder|QCb3/\g<Plate>_\g<Well>
     Create a GenePattern GCT file?:No
     Select source of sample row name:Metadata
     Select the image to use as the identifier:None
