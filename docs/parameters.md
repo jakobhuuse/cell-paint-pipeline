@@ -57,4 +57,10 @@ All parameters have defaults in [nextflow.config](../nextflow.config). Override 
 | `--pycytominer_feature_select_ops` | `variance_threshold,correlation_threshold,blocklist` | Feature-selection operations (CellProfiler branch). |
 | `--pycytominer_consensus_columns` | `Metadata_Compound` | Grouping columns for the consensus (per-perturbation) profile. |
 
+## Slurm
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--slurm_volume` | `/data` | Shared NFS-mounted volume on the SLURM cluster, used for the Apptainer cache dir and the Nextflow work dir. Only applies under the `slurm` profile. |
+
 `-profile` selects the execution runtime, not a `--param`; see [Profiles](../README.md#profiles) in the README.
