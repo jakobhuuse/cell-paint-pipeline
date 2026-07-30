@@ -37,7 +37,7 @@ All parameters have defaults in [nextflow.config](../nextflow.config). Override 
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--qc_exclude_file` | `conf/qc/no_exclusions.csv` (empty) | Plate/Well/Site rows to drop before analysis (CellProfiler branch) or before nuclei segmentation (DeepProfiler branch). Point this at an exclusion list downloaded from a `--pipeline qc` run's gallery. |
+| `--qc_exclude_file` | `conf/qc/no_exclusions.csv` (empty) | Plate/Well/Site rows to drop before feature extraction. On the CellProfiler branch that means before analysis. On the DeepProfiler branch it means before nuclei segmentation, which also keeps those images out of DeepProfiler itself since it runs downstream of nuclei segmentation. Point this at an exclusion list downloaded from a `--pipeline qc` run's gallery. |
 
 ## cytopipe
 
