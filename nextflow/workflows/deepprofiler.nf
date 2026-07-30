@@ -21,9 +21,9 @@ workflow DEEPPROFILER {
 
     chunks = loadDataChunks(loaddata.chunks, images)
 
-    // nuclei.cppipe also computes image-quality measurements as a byproduct of segmentation,
-    // but this branch no longer publishes or reviews them. QC review lives entirely in
-    // `--pipeline qc` (nextflow/workflows/qc.nf), which uses 1_QC.cppipe instead.
+    // nuclei.cppipe only segments nuclei and exports their locations plus flat image metadata,
+    // it does not compute or publish QC measurements. QC review lives entirely in `--pipeline qc`
+    // (nextflow/workflows/qc.nf), which uses 1_QC.cppipe instead.
     cellprofiler = CELLPROFILER_NUCLEI(chunks, file(params.nuclei_cppipe))
 
     image_csv = cellprofiler.image_csv.groupTuple()

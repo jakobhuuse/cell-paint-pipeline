@@ -80,7 +80,6 @@ process CELLPROFILER_NUCLEI {
     output:
     tuple val(plate_id), path("${plate_id}.${chunk_id}.Image.csv"),          emit: image_csv
     tuple val(plate_id), path("chunk${chunk_id}/locations/*-Nuclei.csv"),    emit: locations
-    tuple val(plate_id), path("chunk${chunk_id}"),                          emit: qc
 
     script:
     """
