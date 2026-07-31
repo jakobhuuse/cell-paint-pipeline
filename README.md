@@ -26,7 +26,7 @@ Both start from the same raw images and converge on well- and consensus-level pr
   | CellProfiler | `cellprofiler/cellprofiler:4.2.8` | official, pinned |
   | DeepProfiler | `ghcr.io/jakobhuuse/deepprofiler:0.5.1` | built from the Dockerfile in our [DeepProfiler fork](https://github.com/jakobhuuse/DeepProfiler) (GPU/TF), published to GHCR |
   | pycytominer | `cytomining/pycytominer:1.6.2.dev22_gdb0c469c4` | official, pinned (built-in CLI) |
-  | cytopipe | `ghcr.io/jakobhuuse/cytopipe:1.1.1` | built from the [cytopipe repo](https://github.com/jakobhuuse/cytopipe) (our code) |
+  | cytopipe | `ghcr.io/jakobhuuse/cytopipe:1.2.2` | built from the [cytopipe repo](https://github.com/jakobhuuse/cytopipe) (our code) |
 
 - **`cytopipe`** is the data-management/glue layer. It lives in its own repo ([jakobhuuse/cytopipe](https://github.com/jakobhuuse/cytopipe)) and is consumed here purely as a container image (`--cytopipe_image`). Its CLI exposes `cytopipe loaddata` (build CellProfiler LoadData CSVs + chunking), `cytopipe loaddata-filter` (drop QC-excluded images from a LoadData CSV), `cytopipe convert` (image-tool output → single-cell parquet), `cytopipe bridge` (CellProfiler → DeepProfiler metadata handoff), `cytopipe aggregate` (well-level median profiles, a memory-bounded DuckDB replacement for `pycytominer aggregate`), `cytopipe qc` (build the image-review gallery from a plate's QC output), and `cytopipe report` (QC figures from the published profiles). CellProfiler, DeepProfiler, and the remaining pycytominer steps run via their own images' native entrypoints.
 
@@ -36,7 +36,7 @@ The pipeline runs directly from GitHub, so you do not need to clone it for a nor
 
 ```bash
 # Remote (pulled straight from GitHub, pinned to a release)
-nextflow run jakobhuuse/cell-paint-pipeline -r v1.0.5 -profile standard --pipeline deepprofiler
+nextflow run jakobhuuse/cell-paint-pipeline -r v1.1.2 -profile standard --pipeline deepprofiler
 ```
 
 For local development, clone the repo and run from the checkout (`nextflow run .`) as shown under [Usage](#usage).
@@ -72,8 +72,8 @@ nextflow run . -profile slurm --pipeline deepprofiler \
 
 Point `--input_dir` at the experiment folder (`tests/data/`, containing date folders), a single date folder (`tests/data/2025-12-16/`), or a single plate folder (`tests/data/2025-12-16/26159/`); the level is auto-detected. Any other folders mixed in alongside dates or plates (e.g. a previous run's output) are skipped, since they don't themselves contain plate folders or `.tif` files. Requirements:
 
-- **Images**: `.tif` files under each plate directory (`*_thumb` thumbnails are ignored), named `..._w<N>...`. `cytopipe loaddata` (run internally by the pipeline) maps `w1..w5` to a fixed DNA/Mito/AGP/RNA/ER channel order, a hardcoded assumption about the acquisition's filter configuration that nothing in either codebase verifies. **Before trusting results from a new microscope, protocol, or filter configuration, confirm that mapping against the actual acquisition setup**, see [cytopipe's README warning](https://github.com/jakobhuuse/cytopipe#warning-verify-the-channel-mapping-for-a-new-acquisition-protocol). If it's wrong, every measurement and every DeepProfiler embedding channel is silently mislabeled by stain, with no error raised anywhere.
-- **`platemap.csv`**: directly under `--input_dir`, mapping wells to compounds/metadata.
+- **Images**: `.tif` files under each plate directory (`*_thumb` thumbnails are ignored), named `..._w<N>...`. `cytopipe loaddata` (run internally by the pipeline) maps `w1..w5` to the DNA/Mito/AGP/RNA/ER channel order, which is the expected ordering for the acquisition setup this was written against. A microscope, protocol, or filter configuration that numbers its channels differently needs that mapping updated, see [cytopipe's channel mapping](https://github.com/jakobhuuse/cytopipe#channel-mapping).
+- **`platemap.csv`**: at the experiment root, mapping wells to compounds/metadata. That is `--input_dir` itself when it points at the experiment folder, otherwise its parent (date folder) or grandparent (plate folder). Which of the three it's found at is also how the pipeline detects the level `--input_dir` points at.
 - **CellProfiler pipelines** (`.cppipe`): bundled in [conf/cellprofiler/](conf/cellprofiler/), covering QC, illumination correction, JUMP analysis, and nuclei segmentation. Swap via the `*_cppipe` params. The `deepprofiler` branch still uses `nuclei_cppipe` for segmentation. See [docs/cppipe-guide.md](docs/cppipe-guide.md) for adjusting or replacing one of these.
 - **DeepProfiler config + model**: bundled in [conf/deepprofiler/](conf/deepprofiler/) (`config.json`, `model.hdf5`). Override with `--deepprofiler_config` / `--deepprofiler_model`.
 
